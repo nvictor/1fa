@@ -208,7 +208,7 @@ struct PartsApp: App {
 
 import SwiftUI
 
-struct Preset: Identifiable, Codable {
+struct Preset: Identifiable, Codable, Hashable {
     var id = UUID()
     let name: String
     let segments: [Segment]
@@ -301,7 +301,7 @@ class PresetManager {
 
 import SwiftUI
 
-struct Segment: Identifiable, Codable {
+struct Segment: Identifiable, Codable, Hashable {
     var id = UUID()
     var part: Part
     var barCount: Int
@@ -351,20 +351,25 @@ struct Sidebar: View {
     @State private var groupedPresets: [String: [Preset]] = [:]
 
     var body: some View {
-        List {
+        List(selection: $preset) {
             ForEach(groupedPresets.keys.sorted(), id: \.self) { section in
-                Section(header: Text("\(section) (\(groupedPresets[section]?.count ?? 0))")) {
-                    ForEach(groupedPresets[section] ?? []) { currentPreset in
-                        Text(currentPreset.name)
-                            .onTapGesture {
-                                preset = currentPreset
-                            }
-                    }
-                }
+                sectionView(for: section)
             }
         }
         .onAppear {
             groupedPresets = PresetManager.shared.loadPresets()
+        }
+    }
+
+    @ViewBuilder
+    private func sectionView(for section: String) -> some View {
+        let presets = groupedPresets[section] ?? []
+        Section(header: Text("\(section) (\(presets.count))")) {
+            ForEach(presets) { p in
+                NavigationLink(value: p) {
+                    Text(p.name)
+                }
+            }
         }
     }
 }
