@@ -304,7 +304,7 @@ import SwiftUI
 struct Segment: Identifiable, Codable, Hashable {
     var id = UUID()
     var part: Part
-    var barCount: Int
+    var length: Int
 }
 
 //
