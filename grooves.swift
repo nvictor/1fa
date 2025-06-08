@@ -306,7 +306,7 @@ class PlaybackManager: ObservableObject {
         currentBeat = 0
         playBeat(at: currentBeat)
 
-        let interval = 60.0 / Double(bpm)
+        let interval = 60.0 / (Double(bpm) * 4)
         timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
             self.currentBeat = (self.currentBeat + 1) % self.groove.count
             self.playBeat(at: self.currentBeat)
