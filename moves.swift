@@ -10,19 +10,26 @@ import SwiftUI
 struct ContentView: View {    
     @State private var preset: Preset? = nil
 
-    @State private var segments: [Segment] = [
+    @State private var movements: [[Segment]] = [[
         Segment(movement: .repeat, length: 4),
-        Segment(movement: .repeat, length: 4),
-    ]
+        Segment(movement: .repeat, length: 4)
+    ]]
+    @State private var currentMovement: Int = 0
 
-    var effectiveSegments: Binding<[Segment]> {
+    var segments: Binding<[Segment]> {
         Binding(
-            get: { preset?.segments ?? segments },
+            get: {
+                if let preset = preset {
+                    return preset.segments
+                }
+                return movements[currentMovement]
+            },
             set: { newValue in
                 if preset != nil {
-                    preset = Preset(id: preset!.id, name: preset!.name, segments: newValue)
                 } else {
-                    segments = newValue
+                    if movements.indices.contains(currentMovement) {
+                        movements[currentMovement] = newValue
+                    }
                 }
             }
         )
@@ -35,22 +42,18 @@ struct ContentView: View {
         NavigationSplitView {
             Sidebar(preset: $preset)
         } detail: {
-            if preset != nil {
-                Editor(
-                    segments: effectiveSegments,
-                    selectedSegmentID: $selectedSegmentID
-                )
-            } else {
-                Text("Select a preset")
-            }
+            Editor(
+                movements: $movements,
+                selectedSegmentID: $selectedSegmentID
+            )
         }
         .inspector(isPresented: $showInspector) {
-            Inspector()
+            Inspector(currentMovement: $currentMovement, movements: $movements)
         }
         .toolbar {
             ToolbarItem {
                 Button {
-                    ImageExporter.export(segments: effectiveSegments.wrappedValue)
+                    ImageExporter.export(movements: movements)
                 } label: {
                     Image(systemName: "photo")
                 }
@@ -61,6 +64,12 @@ struct ContentView: View {
                 } label: {
                     Image(systemName: "sidebar.trailing")
                 }
+            }
+        }
+        .onChange(of: preset) { _, newPreset in
+            if let preset = newPreset {
+                movements[currentMovement] = preset.segments
+                segments.wrappedValue = preset.segments
             }
         }
     }
@@ -80,24 +89,28 @@ struct ContentView: View {
 import SwiftUI
 
 struct Editor: View {
-    @Binding var segments: [Segment]
+    @Binding var movements: [[Segment]]
     @Binding var selectedSegmentID: UUID?
 
     var body: some View {
-        HStack(spacing: 2) {
-            ForEach(segments.indices, id: \.self) { index in
-                SegmentBlock(
-                    segment: $segments[index],
-                    isSelected: selectedSegmentID == segments[index].id,
-                    isEven: index.isMultiple(of: 2),
-                    onTap: {
-                        let id = segments[index].id
-                        selectedSegmentID = (selectedSegmentID == id) ? nil : id
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(movements.indices, id: \.self) { index in
+                HStack(spacing: 2) {
+                    ForEach(movements[index].indices, id: \.self) { segmentIndex in
+                        SegmentBlock(
+                            segment: $movements[index][segmentIndex],
+                            isSelected: selectedSegmentID == movements[index][segmentIndex].id,
+                            isEven: segmentIndex.isMultiple(of: 2),
+                            onTap: {
+                                let id = movements[index][segmentIndex].id
+                                selectedSegmentID = (selectedSegmentID == id) ? nil : id
+                            }
+                        )
                     }
-                )
+                }
+                .padding()
             }
         }
-        .padding()
     }
 }
 
@@ -113,8 +126,8 @@ import AppKit
 
 struct ImageExporter {
     @MainActor
-    static func export(segments: [Segment], fileName: String = "move.png") {
-        let view = Editor(segments: .constant(segments), selectedSegmentID: .constant(nil))
+    static func export(movements: [[Segment]], fileName: String = "moves.png") {
+        let view = Editor(movements: .constant(movements), selectedSegmentID: .constant(nil))
             .padding()
             .fixedSize()
             .preferredColorScheme(.light)
@@ -148,8 +161,24 @@ struct ImageExporter {
 import SwiftUI
 
 struct Inspector: View {
+    @Binding var currentMovement: Int
+    @Binding var movements: [[Segment]]
+
     var body: some View {
         Form {
+            Section("Movements") {
+                Stepper("Current: \(currentMovement + 1)",
+                    value: $currentMovement,
+                    in: 0...(movements.count - 1))
+                Button("Add") {
+                    movements.append([
+                        Segment(movement: .repeat, length: 4),
+                        Segment(movement: .repeat, length: 4)
+                    ])
+                    currentMovement = movements.count - 1
+                }
+            }
+
             Section("Debug") {
                 Button("Reset Presets") {
                     UserDefaults.standard.removeObject(forKey: "MovesPresets")
