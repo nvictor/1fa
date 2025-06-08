@@ -484,6 +484,14 @@ class PresetManager {
         "Groove 2": [2, 2, 2, 2, 2, 6],
         "Groove 3": [2, 6, 2, 6]
       },
+      "Strums": {
+        "Bluegrass": [4, 6, 2, 2, 2],
+        "Boom Chicka": [4, 2, 2, 4, 2, 2],
+        "Calypso": [4, 2, 4, 2, 2, 2],
+        "Modern 1": [2, 2, 3, 1, 1, 1, 2, 4],
+        "Modern 2": [2, 2, 3, 1, 1, 1, 2, 2, 1, 1],
+        "Waltz": [4, 4, 2, 6]
+      },
       "Toolbox": {
         "Wholes": [16],
         "Minims": [8, 8],
