@@ -11,10 +11,8 @@ struct ContentView: View {
     @State private var preset: Preset? = nil
 
     @State private var segments: [Segment] = [
-        Segment(part: .empty, barCount: 4),
-        Segment(part: .empty, barCount: 4),
-        Segment(part: .empty, barCount: 4),
-        Segment(part: .empty, barCount: 4)
+        Segment(part: .empty, length: 4),
+        Segment(part: .empty, length: 4)
     ]
 
     var effectiveSegments: Binding<[Segment]> {
@@ -29,18 +27,22 @@ struct ContentView: View {
             }
         )
     }
-    
+
     @State private var selectedSegmentID: UUID? = nil
     @State private var showInspector = false
-    
+
     var body: some View {
         NavigationSplitView {
             Sidebar(preset: $preset)
         } detail: {
-            Editor(
-                segments: effectiveSegments,
-                selectedSegmentID: $selectedSegmentID
-            )
+            if preset != nil {
+                Editor(
+                    segments: effectiveSegments,
+                    selectedSegmentID: $selectedSegmentID
+                )
+            } else {
+                Text("Select a preset")
+            }
         }
         .inspector(isPresented: $showInspector) {
             Inspector(segment: Binding(
@@ -56,6 +58,13 @@ struct ContentView: View {
             ))
         }
         .toolbar {
+            ToolbarItem {
+                Button {
+                    ImageExporter.export(segments: effectiveSegments.wrappedValue)
+                } label: {
+                    Image(systemName: "photo")
+                }
+            }
             ToolbarItem {
                 Button {
                     showInspector.toggle()
@@ -84,21 +93,86 @@ struct Editor: View {
     @Binding var segments: [Segment]
     @Binding var selectedSegmentID: UUID?
 
+    private func groupedSegments() -> [[Int]] {
+        var rows: [[Int]] = []
+        var currentRow: [Int] = []
+        var currentLength = 0
+
+        for index in segments.indices {
+            let length = segments[index].length
+
+            if currentLength + length > 16 {
+                rows.append(currentRow)
+                currentRow = []
+                currentLength = 0
+            }
+
+            currentRow.append(index)
+            currentLength += length
+        }
+
+        if !currentRow.isEmpty {
+            rows.append(currentRow)
+        }
+
+        return rows
+    }
+
     var body: some View {
-        ScrollView(.horizontal) {
-            HStack {
-                ForEach(segments.indices, id: \.self) { index in
-                    SegmentBlock(
-                        segment: $segments[index],
-                        isSelected: selectedSegmentID == segments[index].id,
-                        onSelect: {
-                            let id = segments[index].id
-                            selectedSegmentID = (selectedSegmentID == id) ? nil : id
-                        }
-                    )
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(groupedSegments(), id: \.self) { rowIndices in
+                HStack(spacing: 2) {
+                    ForEach(rowIndices, id: \.self) { index in
+                        SegmentBlock(
+                            segment: $segments[index],
+                            isSelected: selectedSegmentID == segments[index].id,
+                            isEven: index.isMultiple(of: 2),
+                            onTap: {
+                                let id = segments[index].id
+                                selectedSegmentID = (selectedSegmentID == id) ? nil : id
+                            }
+                        )
+                    }
                 }
             }
+        }
+        .padding()
+    }
+}
+
+//
+//  ImageExporter.swift
+//  Parts
+//
+//  Created by Victor Noagbodji on 6/8/25.
+//
+
+import SwiftUI
+import AppKit
+
+struct ImageExporter {
+    @MainActor
+    static func export(segments: [Segment], fileName: String = "parts.png") {
+        let view = Editor(segments: .constant(segments), selectedSegmentID: .constant(nil))
             .padding()
+            .fixedSize()
+            .preferredColorScheme(.light)
+
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = 2
+
+        guard
+            let nsImage = renderer.nsImage,
+            let tiff = nsImage.tiffRepresentation,
+            let bitmap = NSBitmapImageRep(data: tiff),
+            let png = bitmap.representation(using: .png, properties: [:])
+        else { return }
+
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.png]
+        panel.nameFieldStringValue = fileName
+        if panel.runModal() == .OK, let url = panel.url {
+            try? png.write(to: url)
         }
     }
 }
@@ -130,12 +204,16 @@ struct Inspector: View {
                         }
                     }
 
-                    Slider(value: Binding(
-                        get: { Double(self.segment?.barCount ?? 1) },
+                    Picker("Bars", selection: Binding(
+                        get: { self.segment?.length ?? 1 },
                         set: { newValue in
-                            self.segment?.barCount = Int(newValue)
+                            self.segment?.length = newValue
+                        })
+                    ) {
+                        ForEach(1...16, id: \.self) { value in
+                            Text("\(value)").tag(value)
                         }
-                    ), in: 1...16, step: 1, label: { Text("Bars") })
+                    }
                 }
             } else {
                 Text("No segment selected.")
@@ -143,7 +221,7 @@ struct Inspector: View {
 
             Section("Debug") {
                 Button("Reset Presets") {
-                    UserDefaults.standard.removeObject(forKey: "savedPresets")
+                    UserDefaults.standard.removeObject(forKey: "PartsPresets")
                 }
             }
         }
@@ -160,12 +238,10 @@ struct Inspector: View {
 
 import SwiftUI
 
-enum Part: String, CaseIterable, Identifiable, Codable {
+enum Part: String, CaseIterable, Codable {
     case intro, verse, chorus, bridge, outro, refrain, build, coda, tag, empty
 
-    var id: String { rawValue }
-
-    var color: Color {
+    func color() -> Color {
         switch self {
         case .intro: return .purple
         case .verse: return .cyan
@@ -180,6 +256,24 @@ enum Part: String, CaseIterable, Identifiable, Codable {
         }
     }
 }
+
+//
+//  Parts.entitlements
+//  Parts
+//
+//  Created by Victor Noagbodji on 5/4/25.
+//
+
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+</dict>
+</plist>
 
 //
 //  PartsApp.swift
@@ -255,10 +349,11 @@ class PresetManager {
                     let parts = value.split(separator: "/")
                     let part = Part(rawValue: String(parts[0])) ?? .empty
                     let bars = Int(parts[1]) ?? 4
-                    return Segment(part: part, barCount: bars)
+                    return Segment(part: part, length: bars)
                 }
                 return Preset(name: name, segments: segments)
             }
+            .sorted(by: { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending })
         }
     }
 
@@ -319,21 +414,25 @@ import SwiftUI
 struct SegmentBlock: View {
     @Binding var segment: Segment
     var isSelected: Bool
-    var onSelect: () -> Void
-
-    let barWidth: CGFloat = 20
+    var isEven: Bool
+    var onTap: () -> Void
 
     var body: some View {
         VStack {
-            Rectangle()
-                .fill(segment.part.color)
-                .frame(width: CGFloat(segment.barCount) * barWidth, height: 6)
-
-            Text("\(segment.part.rawValue.capitalized):\(segment.barCount)")
+            Text("\(segment.part.rawValue.capitalized)")
                 .font(.caption)
-                .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                .foregroundStyle(isSelected ? .primary : .secondary)
+
+            HStack(spacing: 2) {
+                ForEach(0..<segment.length, id: \.self) { _ in
+                    Rectangle()
+                        .foregroundStyle(isEven ? .primary : .secondary)
+                        .frame(width: 30, height: 30)
+                }
+            }
+            .foregroundStyle(segment.part.color())
         }
-        .onTapGesture { onSelect() }
+        .onTapGesture { onTap() }
     }
 }
 
