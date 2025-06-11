@@ -86,7 +86,6 @@ struct Editor: View {
                 HStack(alignment: .bottom) {
                     Text(lines[index].name)
                         .frame(width: 120, alignment: .trailing)
-                        .fontWeight(index == currentLine ? .bold : .regular)
                         .underline(index == currentLine)
 
                     HStack(spacing: 2) {
