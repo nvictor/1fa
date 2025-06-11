@@ -48,7 +48,9 @@ struct ContentView: View {
             )
         }
         .inspector(isPresented: $showInspector) {
-            Inspector(currentMovement: $currentMovement, movements: $movements)
+            Inspector(currentMovement: $currentMovement,
+                      movements: $movements,
+                      selectedSegmentID: $selectedSegmentID)
         }
         .toolbar {
             ToolbarItem {
@@ -163,19 +165,37 @@ import SwiftUI
 struct Inspector: View {
     @Binding var currentMovement: Int
     @Binding var movements: [[Segment]]
+    @Binding var selectedSegmentID: UUID?
+
+    var selectedSegmentBinding: Binding<Segment>? {
+        guard let id = selectedSegmentID else { return nil }
+        for i in movements.indices {
+            if let j = movements[i].firstIndex(where: { $0.id == id }) {
+                return $movements[i][j]
+            }
+        }
+        return nil
+    }
 
     var body: some View {
         Form {
             Section("Movements") {
                 Stepper("Current: \(currentMovement + 1)",
-                    value: $currentMovement,
-                    in: 0...(movements.count - 1))
+                        value: $currentMovement,
+                        in: 0...(movements.count - 1))
                 Button("Add") {
                     movements.append([
                         Segment(movement: .repeat, length: 4),
                         Segment(movement: .repeat, length: 4)
                     ])
                     currentMovement = movements.count - 1
+                }
+            }
+
+            if let segment = selectedSegmentBinding {
+                Section("Segment") {
+                    Stepper("Length: \(segment.length.wrappedValue)",
+                            value: segment.length, in: 1...16)
                 }
             }
 
