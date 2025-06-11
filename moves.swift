@@ -83,10 +83,11 @@ struct Editor: View {
     var body: some View {
         VStack(alignment: .leading) {
             ForEach(lines.indices, id: \.self) { index in
-                HStack() {
+                HStack(alignment: .bottom) {
                     Text(lines[index].name)
-                        .frame(width: 100, alignment: .leading)
+                        .frame(width: 120, alignment: .trailing)
                         .fontWeight(index == currentLine ? .bold : .regular)
+                        .underline(index == currentLine)
 
                     HStack(spacing: 2) {
                         ForEach(lines[index].segments.indices, id: \.self) { s in
@@ -101,7 +102,7 @@ struct Editor: View {
                         }
                     }
                 }
-                .padding()
+                .padding(2)
             }
         }
     }
@@ -387,19 +388,19 @@ class PresetManager {
     private static let defaultPresetJSON = """
     {
       "Intervals": {
-        "1. Tension": ["p/1/0", "p/1/1"],
-        "2. Doubt": ["p/1/0", "p/1/-1"],
-        "3a. Surrender 1": ["p/1/0", "p/1/2"],
-        "3b. Surrender 2": ["p/1/0", "p/1/-2"],
-        "4a. Sadness": ["p/1/0", "p/1/3"],
-        "4b. Call": ["p/1/0", "p/1/-3"],
-        "5. Unfinished": ["p/1/0", "p/1/5"],
-        "6a. Question": ["p/1/0", "p/1/7"],
-        "6b. Agreement": ["p/1/0", "p/1/-7"],
-        "7a. Wonder": ["p/1/0", "p/1/9"],
-        "7b. Begging": ["p/1/0", "p/1/-9"],
-        "8. Insistence": ["p/1/0", "p/1/11"],
-        "9. Leap": ["p/1/0", "p/1/12"],
+        "Tension": ["p/1/0", "p/1/1"],
+        "Doubt": ["p/1/0", "p/1/-1"],
+        "Surrender a": ["p/1/0", "p/1/2"],
+        "Surrender b": ["p/1/0", "p/1/-2"],
+        "Sadness": ["p/1/0", "p/1/3"],
+        "Call": ["p/1/0", "p/1/-3"],
+        "Unfinished": ["p/1/0", "p/1/5"],
+        "Question": ["p/1/0", "p/1/7"],
+        "Agreement": ["p/1/0", "p/1/-7"],
+        "Wonder": ["p/1/0", "p/1/9"],
+        "Begging": ["p/1/0", "p/1/-9"],
+        "Insistence": ["p/1/0", "p/1/11"],
+        "Leap": ["p/1/0", "p/1/12"],
       },
       "Scales": {
         "Major scale": ["p/1/0", "p/1/2", "p/1/4", "p/1/5", "p/1/7", "p/1/9", "p/1/11", "p/1/12"],
