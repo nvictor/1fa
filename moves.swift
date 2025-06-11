@@ -10,31 +10,15 @@ import SwiftUI
 struct ContentView: View {    
     @State private var preset: Preset? = nil
 
-    @State private var movements: [[Segment]] = [[
-        Segment(movement: .repeat, length: 4),
-        Segment(movement: .repeat, length: 4)
-    ]]
-    @State private var currentMovement: Int = 0
-
-    var segments: Binding<[Segment]> {
-        Binding(
-            get: {
-                if let preset = preset {
-                    return preset.segments
-                }
-                return movements[currentMovement]
-            },
-            set: { newValue in
-                if preset != nil {
-                } else {
-                    if movements.indices.contains(currentMovement) {
-                        movements[currentMovement] = newValue
-                    }
-                }
-            }
-        )
-    }
-    
+    @State private var lines: [Line] = [
+        Line(
+            name: "Untitled",
+            segments: [
+                Segment(movement: .repeat, length: 4),
+                Segment(movement: .repeat, length: 4)
+            ])
+    ]
+    @State private var currentLine: Int = 0
     @State private var selectedSegmentID: UUID? = nil
     @State private var showInspector = false
     
@@ -43,19 +27,20 @@ struct ContentView: View {
             Sidebar(preset: $preset)
         } detail: {
             Editor(
-                movements: $movements,
-                selectedSegmentID: $selectedSegmentID
+                lines: $lines,
+                selectedSegmentID: $selectedSegmentID,
+                currentLine: $currentLine
             )
         }
         .inspector(isPresented: $showInspector) {
-            Inspector(currentMovement: $currentMovement,
-                      movements: $movements,
+            Inspector(currentLine: $currentLine,
+                      lines: $lines,
                       selectedSegmentID: $selectedSegmentID)
         }
         .toolbar {
             ToolbarItem {
                 Button {
-                    ImageExporter.export(movements: movements)
+                    ImageExporter.export(lines: lines)
                 } label: {
                     Image(systemName: "photo")
                 }
@@ -69,9 +54,9 @@ struct ContentView: View {
             }
         }
         .onChange(of: preset) { _, newPreset in
-            if let preset = newPreset {
-                movements[currentMovement] = preset.segments
-                segments.wrappedValue = preset.segments
+            guard let p = newPreset else { return }
+            if lines.indices.contains(currentLine) {
+                lines[currentLine] = Line(name: p.name, segments: p.segments)
             }
         }
     }
@@ -91,23 +76,29 @@ struct ContentView: View {
 import SwiftUI
 
 struct Editor: View {
-    @Binding var movements: [[Segment]]
+    @Binding var lines: [Line]
     @Binding var selectedSegmentID: UUID?
+    @Binding var currentLine: Int
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            ForEach(movements.indices, id: \.self) { index in
-                HStack(spacing: 2) {
-                    ForEach(movements[index].indices, id: \.self) { segmentIndex in
-                        SegmentBlock(
-                            segment: $movements[index][segmentIndex],
-                            isSelected: selectedSegmentID == movements[index][segmentIndex].id,
-                            isEven: segmentIndex.isMultiple(of: 2),
-                            onTap: {
-                                let id = movements[index][segmentIndex].id
+        VStack(alignment: .leading) {
+            ForEach(lines.indices, id: \.self) { index in
+                HStack() {
+                    Text(lines[index].name)
+                        .frame(width: 100, alignment: .leading)
+                        .fontWeight(index == currentLine ? .bold : .regular)
+
+                    HStack(spacing: 2) {
+                        ForEach(lines[index].segments.indices, id: \.self) { s in
+                            SegmentBlock(
+                                segment: $lines[index].segments[s],
+                                isSelected: selectedSegmentID == lines[index].segments[s].id,
+                                isEven: s.isMultiple(of: 2)
+                            ) {
+                                let id = lines[index].segments[s].id
                                 selectedSegmentID = (selectedSegmentID == id) ? nil : id
                             }
-                        )
+                        }
                     }
                 }
                 .padding()
@@ -128,8 +119,12 @@ import AppKit
 
 struct ImageExporter {
     @MainActor
-    static func export(movements: [[Segment]], fileName: String = "moves.png") {
-        let view = Editor(movements: .constant(movements), selectedSegmentID: .constant(nil))
+    static func export(lines: [Line], fileName: String = "moves.png") {
+        let view = Editor(
+            lines: .constant(lines),
+            selectedSegmentID: .constant(nil),
+            currentLine: .constant(0)
+        )
             .padding()
             .fixedSize()
             .preferredColorScheme(.light)
@@ -163,15 +158,15 @@ struct ImageExporter {
 import SwiftUI
 
 struct Inspector: View {
-    @Binding var currentMovement: Int
-    @Binding var movements: [[Segment]]
+    @Binding var currentLine: Int
+    @Binding var lines: [Line]
     @Binding var selectedSegmentID: UUID?
 
-    var selectedSegmentBinding: Binding<Segment>? {
-        guard let id = selectedSegmentID else { return nil }
-        for i in movements.indices {
-            if let j = movements[i].firstIndex(where: { $0.id == id }) {
-                return $movements[i][j]
+    private var selectedSegmentBinding: Binding<Segment>? {
+        guard lines.indices.contains(currentLine) else { return nil }
+        for index in lines[currentLine].segments.indices {
+            if lines[currentLine].segments[index].id == selectedSegmentID {
+                return $lines[currentLine].segments[index]
             }
         }
         return nil
@@ -179,16 +174,33 @@ struct Inspector: View {
 
     var body: some View {
         Form {
-            Section("Movements") {
-                Stepper("Current: \(currentMovement + 1)",
-                        value: $currentMovement,
-                        in: 0...(movements.count - 1))
+            Section("Line") {
+                Picker("Current", selection: $currentLine) {
+                    ForEach(lines.indices, id: \.self) { i in
+                        Text(lines[i].name).tag(i)
+                    }
+                }
+
+                TextField("Name", text: $lines[currentLine].name)
+
                 Button("Add") {
-                    movements.append([
-                        Segment(movement: .repeat, length: 4),
-                        Segment(movement: .repeat, length: 4)
-                    ])
-                    currentMovement = movements.count - 1
+                    lines.append(
+                        Line(
+                            name: "Line \(lines.count + 1)",
+                            segments: [
+                                Segment(movement: .repeat, length: 4),
+                                Segment(movement: .repeat, length: 4)
+                            ])
+                    )
+                    currentLine = lines.count - 1
+                }
+
+                if lines.count > 1 {
+                    Button("Delete") {
+                        lines.remove(at: currentLine)
+                        currentLine = max(0, currentLine - 1)
+                    }
+                    .tint(.red)
                 }
             }
 
@@ -207,6 +219,21 @@ struct Inspector: View {
         }
         .padding()
     }
+}
+
+//
+//  Line.swift
+//  Moves
+//
+//  Created by Victor Noagbodji on 6/11/25.
+//
+
+import Foundation
+
+struct Line: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var name: String
+    var segments: [Segment]
 }
 
 //
@@ -281,15 +308,6 @@ struct Preset: Identifiable, Codable, Hashable, Equatable {
     let name: String
     let segments: [Segment]
 }
-
-//
-//  PresetManager.swift
-//  Moves
-//
-//  Created by Victor Noagbodji on 6/3/25.
-//
-
-import Foundation
 
 //
 //  PresetManager.swift
