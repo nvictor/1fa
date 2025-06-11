@@ -291,6 +291,15 @@ struct Preset: Identifiable, Codable, Hashable, Equatable {
 
 import Foundation
 
+//
+//  PresetManager.swift
+//  Moves
+//
+//  Created by Victor Noagbodji on 6/3/25.
+//
+
+import Foundation
+
 class PresetManager {
     static let shared = PresetManager()
     private let defaultsKey = "MovesPresets"
@@ -366,12 +375,13 @@ class PresetManager {
         "3b. Surrender 2": ["p/1/0", "p/1/-2"],
         "4a. Sadness": ["p/1/0", "p/1/3"],
         "4b. Call": ["p/1/0", "p/1/-3"],
-        "5. Unfinished": ["p/1/0", "p/1/4"],
-        "6a. Question": ["p/1/0", "p/1/5"],
-        "6b. Agreement": ["p/1/0", "p/1/-5"],
-        "7a. Wonder": ["p/1/0", "p/1/7"],
-        "7b. Begging": ["p/1/0", "p/1/-7"],
-        "8. Insistence": ["p/1/0", "p/1/8"]
+        "5. Unfinished": ["p/1/0", "p/1/5"],
+        "6a. Question": ["p/1/0", "p/1/7"],
+        "6b. Agreement": ["p/1/0", "p/1/-7"],
+        "7a. Wonder": ["p/1/0", "p/1/9"],
+        "7b. Begging": ["p/1/0", "p/1/-9"],
+        "8. Insistence": ["p/1/0", "p/1/11"],
+        "9. Leap": ["p/1/0", "p/1/12"],
       },
       "Scales": {
         "Major scale": ["p/1/0", "p/1/2", "p/1/4", "p/1/5", "p/1/7", "p/1/9", "p/1/11", "p/1/12"],
@@ -391,6 +401,7 @@ class PresetManager {
       },
       "Motifs": {
         "Ave Maria": ["p/1/0", "p/1/3", "p/1/7", "p/1/12", "p/1/7", "p/1/3"],
+        "Ave Wonder": ["p/1/0", "p/1/3", "p/1/7", "p/1/9", "p/1/7", "p/1/3"],
         "EDM": ["p/1/0", "p/1/3", "p/1/0", "p/1/2", "p/1/0", "p/1/3", "p/1/0", "p/1/2"],
         "Spy clock": ["p/1/0", "p/1/1", "p/1/2", "p/1/1", "p/1/0", "p/1/1", "p/1/2", "p/1/1"],
         "Dies Irae": ["p/1/3", "p/1/2", "p/1/3", "p/1/0", "p/1/2", "p/1/-2", "p/1/0", "p/1/0"],
