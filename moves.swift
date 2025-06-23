@@ -100,6 +100,8 @@ struct Editor: View {
                             }
                         }
                     }
+
+                    Text(lines[index].repeatCount > 1 ? "x\(lines[index].repeatCount)" : "")
                 }
                 .padding(2)
             }
@@ -183,6 +185,12 @@ struct Inspector: View {
 
                 TextField("Name", text: $lines[currentLine].name)
 
+		Picker("Repeat", selection: $lines[currentLine].repeatCount) {
+                    ForEach(1..<17, id: \.self) { count in
+                        Text("\(count)").tag(count)
+                    }
+                }
+
                 Button("Add") {
                     lines.append(
                         Line(
@@ -234,6 +242,7 @@ struct Line: Identifiable, Codable, Hashable {
     var id = UUID()
     var name: String
     var segments: [Segment]
+    var repeatCount: Int = 1
 }
 
 //
