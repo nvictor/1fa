@@ -110,6 +110,15 @@ struct ContentView: View {
             if let preset = newPreset {
                 playback.groove = preset.beats + Array(repeating: .empty, count: 16 - preset.beats.count)
             }
+        } 
+        .onAppear {
+            NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                if event.keyCode == 49 {
+                    playback.isPlaying ? playback.stop() : playback.start()
+                    return nil
+                }
+                return event
+            }
         }
     }
 }
@@ -133,6 +142,9 @@ struct Editor: View {
     @Binding var currentBeat: Int
 
     var body: some View {
+	Text("Beats: \(groove.count)")
+            .font(.headline)
+
         HStack(spacing: 2) {
             ForEach(0..<groove.count, id: \.self) { index in
                 BeatBlock(
@@ -255,22 +267,20 @@ struct Inspector: View {
                         bpm = min(max(newValue, 40), 300)
                     }
 
-                Slider(
-                    value: Binding(
-                        get: { Double(groove.count) },
-                        set: { newValue in
-                            let intValue = Int(newValue)
-                            if intValue < groove.count {
-                                groove = Array(groove.prefix(intValue))
-                            } else {
-                                groove += Array(repeating: .empty, count: intValue - groove.count)
-                            }
+                Picker("Beats", selection: Binding(
+                    get: { groove.count },
+                    set: { newValue in
+                        if newValue < groove.count {
+                            groove = Array(groove.prefix(newValue))
+                        } else {
+                            groove += Array(repeating: .empty, count: newValue - groove.count)
                         }
-                    ),
-                    in: 4...32,
-                    step: 4,
-                    label: { Text("Beats") }
-                )
+                    }
+                )) {
+                    ForEach(Array(stride(from: 4, through: 32, by: 4)), id: \.self) { count in
+                        Text("\(count)").tag(count)
+                    }
+                }
             }
 
             Section("Debug") {
