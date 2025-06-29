@@ -484,6 +484,9 @@ class PresetManager {
         "Groove 2": [2, 2, 2, 2, 2, 6],
         "Groove 3": [2, 6, 2, 6]
       },
+     "Slows": {
+        "Groove 1": [1, 1, 1, 3, 3, 3]
+      },
       "Strums": {
         "Bluegrass": [4, 6, 2, 2, 2],
         "Boom Chicka": [4, 2, 2, 4, 2, 2],
