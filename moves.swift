@@ -14,8 +14,8 @@ struct ContentView: View {
         Line(
             name: "Untitled",
             segments: [
-                Segment(movement: .repeat, length: 4),
-                Segment(movement: .repeat, length: 4)
+                Segment(movement: .repeat, length: 4, note: ""),
+                Segment(movement: .repeat, length: 4, note: "")
             ])
     ]
     @State private var currentLine: Int = 0
@@ -185,7 +185,7 @@ struct Inspector: View {
 
                 TextField("Name", text: $lines[currentLine].name)
 
-		Picker("Repeat", selection: $lines[currentLine].repeatCount) {
+                Picker("Repeat", selection: $lines[currentLine].repeatCount) {
                     ForEach(1..<17, id: \.self) { count in
                         Text("\(count)").tag(count)
                     }
@@ -196,8 +196,8 @@ struct Inspector: View {
                         Line(
                             name: "Line \(lines.count + 1)",
                             segments: [
-                                Segment(movement: .repeat, length: 4),
-                                Segment(movement: .repeat, length: 4)
+                                Segment(movement: .repeat, length: 4, note: ""),
+                                Segment(movement: .repeat, length: 4, note: "")
                             ])
                     )
                     currentLine = lines.count - 1
@@ -266,13 +266,6 @@ enum Movement: String, CaseIterable, Codable {
         }
     }
 }
-
-//
-//  Moves.entitlements
-//  Moves
-//
-//  Created by Victor Noagbodji on 5/28/25.
-//
 
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -421,7 +414,7 @@ class PresetManager {
       },
       "Cadences": {
         "Cadence 1": ["p/4/8", "p/4/10", "p/4/12"],
-        "Cadence 2": ["p/4/8", "p/4/10", "p/4/15", "p/4/17", "p/4/12"],
+        "Cadence 2": ["p/4/8", "p/4/10", "p/4/17", "p/4/15", "p/4/12"],
         "Cadence 3": ["p/1/3", "p/1/2", "p/1/0", "p/1/-2", "p/4/0"],
         "Cadence 4": ["p/1/0", "p/1/3", "p/1/0", "p/1/-2", "p/4/0"],
         "Cadence 5": ["p/4/3", "p/4/5", "p/4/0"],
@@ -482,7 +475,7 @@ struct Segment: Identifiable, Codable, Hashable {
     var id = UUID()
     var movement: Movement
     var length: Int
-    var note: String? = nil
+    var note: String
 }
 
 //
@@ -502,7 +495,7 @@ struct SegmentBlock: View {
 
     var body: some View {
         VStack {
-            Text("\(segment.note ?? "")")
+            Text("\(segment.note)")
                 .font(.caption)
 
             HStack(spacing: 2) {
