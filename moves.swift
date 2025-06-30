@@ -84,7 +84,7 @@ struct Editor: View {
         VStack(alignment: .leading) {
             ForEach(lines.indices, id: \.self) { index in
                 HStack(alignment: .bottom) {
-                    Text(lines[index].name)
+                    Text((lines[index].name) + (lines[index].repeatCount > 1 ? " (x\(lines[index].repeatCount))" : ""))
                         .frame(width: 120, alignment: .trailing)
                         .underline(index == currentLine)
 
@@ -100,8 +100,6 @@ struct Editor: View {
                             }
                         }
                     }
-
-                    Text(lines[index].repeatCount > 1 ? "x\(lines[index].repeatCount)" : "")
                 }
                 .padding(2)
             }
