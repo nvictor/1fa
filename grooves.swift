@@ -110,7 +110,7 @@ struct ContentView: View {
             if let preset = newPreset {
                 playback.groove = preset.beats + Array(repeating: .empty, count: 16 - preset.beats.count)
             }
-        } 
+        }
         .onAppear {
             NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
                 if event.keyCode == 49 {
@@ -142,9 +142,9 @@ struct Editor: View {
     @Binding var currentBeat: Int
 
     var body: some View {
-	Text("Beats: \(groove.count)")
+        Text("Beats: \(groove.count)")
             .font(.headline)
-
+    
         HStack(spacing: 2) {
             ForEach(0..<groove.count, id: \.self) { index in
                 BeatBlock(
@@ -160,13 +160,6 @@ struct Editor: View {
         .foregroundStyle(Color.accentColor)
     }
 }
-
-//
-//  Grooves.entitlements
-//  Grooves
-//
-//  Created by Victor Noagbodji on 5/31/25.
-//
 
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -347,7 +340,7 @@ class PlaybackManager: ObservableObject {
 
 import Foundation
 
-struct Preset: Identifiable, Equatable {
+struct Preset: Identifiable, Equatable, Hashable {
     let id = UUID()
     let name: String
     let beats: [Beat]
@@ -494,7 +487,7 @@ class PresetManager {
         "Groove 2": [2, 2, 2, 2, 2, 6],
         "Groove 3": [2, 6, 2, 6]
       },
-     "Slows": {
+      "Slows": {
         "Groove 1": [1, 1, 1, 3, 3, 3]
       },
       "Strums": {
