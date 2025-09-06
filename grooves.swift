@@ -1,4 +1,109 @@
 //
+//  AudioEngineManager.swift
+//  Grooves
+//
+//  Created by Victor Noagbodji on 9/6/25.
+//
+
+import Foundation
+import AVFoundation
+
+enum Instrument: String, CaseIterable, Identifiable {
+    case piano = "Acoustic Grand Piano"
+    case woodblock = "Woodblock"
+    case taiko = "Taiko Drum"
+    case drums = "Drums"
+
+    var id: String { rawValue }
+
+    var program: UInt8 {
+        switch self {
+        case .piano: return 0
+        case .woodblock: return 115
+        case .taiko: return 116
+        case .drums: return 0 // Percussion bank
+        }
+    }
+
+    var isPercussion: Bool {
+        self == .drums
+    }
+}
+
+class AudioEngineManager {
+    static let shared = AudioEngineManager()
+
+    private let engine = AVAudioEngine()
+    private let sampler = AVAudioUnitSampler()
+
+    private init() {
+        setupAudioEngine()
+    }
+
+    private func setupAudioEngine() {
+        engine.attach(sampler)
+        engine.connect(sampler, to: engine.mainMixerNode, format: nil)
+
+        do {
+            try engine.start()
+        } catch {
+            print("❌ Failed to start AVAudioEngine: \(error)")
+        }
+
+        loadDefaultInstrument()
+    }
+
+    private func loadDefaultInstrument() {
+        // Apple provides a built-in General MIDI SoundFont at this path:
+        guard let url = Bundle.main.url(forResource: "gs_instruments", withExtension: "dls") ??
+                        URL(string: "/System/Library/Components/CoreAudio.component/Contents/Resources/gs_instruments.dls")
+        else {
+            print("⚠️ Could not find default instrument soundfont")
+            return
+        }
+
+        do {
+            try sampler.loadSoundBankInstrument(
+                at: url,
+                program: 0,        // Acoustic Grand Piano
+                bankMSB: UInt8(kAUSampler_DefaultMelodicBankMSB),
+                bankLSB: UInt8(kAUSampler_DefaultBankLSB)
+            )
+        } catch {
+            print("⚠️ Failed to load default instrument: \(error)")
+        }
+    }
+
+    func loadInstrument(_ instrument: Instrument) {
+        guard let url = Bundle.main.url(forResource: "gs_instruments", withExtension: "dls") ??
+                        URL(string: "/System/Library/Components/CoreAudio.component/Contents/Resources/gs_instruments.dls")
+        else { return }
+
+        do {
+            try sampler.loadSoundBankInstrument(
+                at: url,
+                program: instrument.program,
+                bankMSB: instrument.isPercussion
+                    ? UInt8(kAUSampler_DefaultPercussionBankMSB)
+                    : UInt8(kAUSampler_DefaultMelodicBankMSB),
+                bankLSB: UInt8(kAUSampler_DefaultBankLSB)
+            )
+            print("🎹 Loaded instrument: \(instrument.rawValue)")
+        } catch {
+            print("⚠️ Failed to load instrument \(instrument.rawValue): \(error)")
+        }
+    }
+    
+    func play(note: UInt8, velocity: UInt8) {
+        sampler.startNote(note, withVelocity: velocity, onChannel: 0)
+    }
+
+    func stop(note: UInt8) {
+        sampler.stopNote(note, onChannel: 0)
+    }
+}
+
+//
 //  Beat.swift
 //  Grooves
 //
@@ -7,21 +112,44 @@
 
 import SwiftUI
 
-enum Beat: CaseIterable {
-    case empty, low, high
-
-    func next() -> Beat {
-        let all = Beat.allCases
-        let idx = all.firstIndex(of: self) ?? 0
-        return all[(idx + 1) % all.count]
-    }
+enum Beat: Equatable, Codable, Hashable {
+    case empty
+    case low(velocity: Int)
+    case high(velocity: Int)
     
+    func next() -> Beat {
+        switch self {
+        case .empty:
+            return .low(velocity: 80)
+        case .low:
+            return .high(velocity: 100)
+        case .high:
+            return .empty
+        }
+    }
+
+    var velocity: Int? {
+        switch self {
+        case .low(let v), .high(let v): return v
+        case .empty: return nil
+        }
+    }
+
     func hierarchy() -> HierarchicalShapeStyle {
         switch self {
         case .empty: return .tertiary
         case .low: return .secondary
         case .high: return .primary
         }
+    }
+
+    func velocityColor(base: Color = .blue) -> Color {
+        guard let velocity = self.velocity else {
+            return .gray.opacity(0.2)
+        }
+        let normalized = Double(velocity) / 127.0
+        // Brighter color for higher velocities
+        return base.opacity(0.4 + 0.6 * normalized)
     }
 }
 
@@ -40,13 +168,17 @@ struct BeatBlock: View {
     let onTap: () -> Void
 
     var body: some View {
-        Rectangle()
-            .foregroundStyle(beat.hierarchy())
-            .overlay(
-                Rectangle().stroke(isCurrent ? .white : Color.clear, lineWidth: 2)
-            )
-            .frame(width: 30, height: 30)
-            .onTapGesture { onTap() }
+        VStack {
+            Rectangle()
+                .fill(beat.velocityColor(base: .blue))
+                .overlay(
+                    Rectangle().stroke(isCurrent ? .white : Color.clear, lineWidth: 2)
+                )
+                .frame(width: 30, height: 30)
+                .onTapGesture { onTap() }
+            
+            Text("\(beat.velocity ?? 0)")
+        }
     }
 }
 
@@ -79,7 +211,7 @@ struct ContentView: View {
             }
         }
         .inspector(isPresented: $showInspector) {
-            Inspector(groove: $playback.groove, bpm: $playback.bpm)
+            Inspector(playback: playback)
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -87,6 +219,14 @@ struct ContentView: View {
                     playback.isPlaying ? playback.stop() : playback.start()
                 }) {
                     Image(systemName: playback.isPlaying ? "stop.fill" : "play.fill")
+                }
+            }
+
+            ToolbarItem {
+                Button {
+                    MIDIExporter.export(groove: playback.groove, bpm: playback.bpm, timeSig: playback.timeSignature)
+                } label: {
+                    Image(systemName: "music.note.list")
                 }
             }
 
@@ -109,6 +249,7 @@ struct ContentView: View {
         .onChange(of: preset) { _, newPreset in
             if let preset = newPreset {
                 playback.groove = preset.beats + Array(repeating: .empty, count: 16 - preset.beats.count)
+                playback.applyVelocities()
             }
         }
         .onAppear {
@@ -241,8 +382,7 @@ struct ImageExporter {
 import SwiftUI
 
 struct Inspector: View {
-    @Binding var groove: [Beat]
-    @Binding var bpm: Int
+    @ObservedObject var playback: PlaybackManager
 
     private var bpmFormatter: NumberFormatter {
         let fmt = NumberFormatter()
@@ -255,18 +395,18 @@ struct Inspector: View {
     var body: some View {
         Form {
             Section("Settings") {
-                TextField("BPM", value: $bpm, formatter: bpmFormatter)
-                    .onChange(of: bpm) { oldValue, newValue in
-                        bpm = min(max(newValue, 40), 300)
+                TextField("BPM", value: $playback.bpm, formatter: bpmFormatter)
+                    .onChange(of: playback.bpm) { oldValue, newValue in
+                        playback.bpm = min(max(newValue, 40), 300)
                     }
 
                 Picker("Beats", selection: Binding(
-                    get: { groove.count },
+                    get: { playback.groove.count },
                     set: { newValue in
-                        if newValue < groove.count {
-                            groove = Array(groove.prefix(newValue))
+                        if newValue < playback.groove.count {
+                            playback.groove = Array(playback.groove.prefix(newValue))
                         } else {
-                            groove += Array(repeating: .empty, count: newValue - groove.count)
+                            playback.groove += Array(repeating: .empty, count: newValue - playback.groove.count)
                         }
                     }
                 )) {
@@ -276,6 +416,48 @@ struct Inspector: View {
                 }
             }
 
+            Section("Instrument") {
+                Picker("Sound", selection: $playback.instrument) {
+                    ForEach(Instrument.allCases) { instr in
+                        Text(instr.rawValue).tag(instr)
+                    }
+                }
+            }
+
+            Section("Velocity") {
+                Picker("Style", selection: $playback.grooveStyle) {
+                    ForEach(GrooveStyle.allCases) { style in
+                        Text(style.rawValue.capitalized).tag(style)
+                    }
+                }
+
+                Picker("Signature", selection: $playback.timeSignature) {
+                    ForEach(TimeSignature.allCases) { ts in
+                        Text(ts.rawValue).tag(ts)
+                    }
+                }
+
+                Picker("Contour", selection: $playback.contour) {
+                    ForEach(Contour.allCases) { c in
+                        Text(c.rawValue.capitalized).tag(c)
+                    }
+                }
+
+                HStack {
+                    Text("Base Velocity")
+                    Slider(value: Binding(
+                        get: { Double(playback.baseVelocity) },
+                        set: { playback.baseVelocity = Int($0) }
+                    ), in: 1...127)
+                    Text("\(playback.baseVelocity)")
+                        .frame(width: 30, alignment: .leading)
+                }
+
+                Button("Regenerate Velocities") {
+                    playback.applyVelocities()
+                }
+            }
+            
             Section("Debug") {
                 Button("Reset Presets") {
                     UserDefaults.standard.removeObject(forKey: "GroovesPresets")
@@ -283,6 +465,91 @@ struct Inspector: View {
             }
         }
         .padding()
+    }
+}
+
+//
+//  MIDIExporter.swift
+//  Grooves
+//
+//  Created by Victor Noagbodji on 5/31/25.
+//
+
+import Foundation
+import AudioToolbox
+import AppKit
+
+struct MIDIExporter {
+    static func export(groove: [Beat], bpm: Int, timeSig: TimeSignature) {
+        var seq: MusicSequence?
+        guard ok(NewMusicSequence(&seq), "NewMusicSequence"), let sequence = seq else { return }
+
+        var track: MusicTrack?
+        guard ok(MusicSequenceNewTrack(sequence, &track), "MusicSequenceNewTrack"),
+              let musicTrack = track else { return }
+
+        var tempoTrack: MusicTrack?
+        ok(MusicSequenceGetTempoTrack(sequence, &tempoTrack), "MusicSequenceGetTempoTrack")
+        if let tempoTrack {
+            ok(MusicTrackNewExtendedTempoEvent(tempoTrack, 0.0, Double(bpm)),
+               "MusicTrackNewExtendedTempoEvent")
+        }
+
+        let barBeats: Double = {
+            switch timeSig {
+            case .fourFour:  return 4.0
+            case .threeFour: return 3.0
+            case .sixEight:  return 3.0   // dotted-quarter = 1.5 qn, 2 beats per bar → 3 qn total
+            case .nineEight: return 4.5   // 3 dotted-quarters → 4.5 qn total
+            }
+        }()
+
+        // Each grid step duration (in beats), with a simple gate so notes don’t overlap
+        let steps = max(1, groove.count)
+        let stepBeats = barBeats / Double(steps)
+        let gate: Double = 0.90
+        let noteDurBeats = max(0.01, stepBeats * gate)
+
+        // Write notes
+        for (i, beat) in groove.enumerated() {
+            guard let velocity = beat.velocity else { continue }
+
+            let startBeat = Double(i) * stepBeats
+            var msg = MIDINoteMessage(
+                channel: 0,
+                note: 60,                         // Middle C for now
+                velocity: UInt8(clamping: velocity),
+                releaseVelocity: 0,
+                duration: Float32(noteDurBeats)   // duration in beats
+            )
+            ok(MusicTrackNewMIDINoteEvent(musicTrack, startBeat, &msg), "MusicTrackNewMIDINoteEvent")
+        }
+
+        let panel = NSSavePanel()
+        panel.title = "Export MIDI"
+        panel.allowedContentTypes = [.midi]
+        panel.nameFieldStringValue = "groove.mid"
+
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            // Resolution (ticks per quarter) for the .mid file
+            let ppq: Int16 = 480
+            let status = MusicSequenceFileCreate(sequence, url as CFURL, .midiType, .eraseFile, ppq)
+            if status != noErr {
+                print("❌ MusicSequenceFileCreate failed: \(status)")
+            } else {
+                print("✅ MIDI exported to \(url.path)")
+            }
+        }
+    }
+
+    @discardableResult
+    private static func ok(_ status: OSStatus, _ where_: String) -> Bool {
+        if status != noErr {
+            print("❌ \(where_) failed with status \(status)")
+            return false
+        }
+        return true
     }
 }
 
@@ -300,11 +567,21 @@ class PlaybackManager: ObservableObject {
     @Published var currentBeat = 0
     @Published var bpm: Int = 80
     @Published var groove: [Beat] = Array(repeating: .empty, count: 16)
+    @Published var instrument: Instrument = .piano {
+        didSet { audioEngine.loadInstrument(instrument) }
+    }
+    @Published var grooveStyle: GrooveStyle = .rock
+    @Published var timeSignature: TimeSignature = .fourFour
+    @Published var baseVelocity: Int = 90
+    @Published var contour: Contour = .normal
 
     private var timer: Timer?
     private let soundService = SoundService()
+    private let audioEngine = AudioEngineManager.shared
 
     func start() {
+        applyVelocities()
+
         isPlaying = true
         currentBeat = 0
         playBeat(at: currentBeat)
@@ -316,6 +593,23 @@ class PlaybackManager: ObservableObject {
         }
     }
 
+    func applyVelocities() {
+        let velocities = VelocityGenerator.generate(
+            groove: groove,
+            style: grooveStyle,
+            base: baseVelocity,
+            timeSig: timeSignature,
+            contour: contour
+        )
+        for i in 0..<groove.count {
+            switch groove[i] {
+            case .low: groove[i] = .low(velocity: velocities[i])
+            case .high: groove[i] = .high(velocity: velocities[i])
+            case .empty: break
+            }
+        }
+    }
+
     func stop() {
         isPlaying = false
         timer?.invalidate()
@@ -324,9 +618,21 @@ class PlaybackManager: ObservableObject {
     }
 
     private func playBeat(at index: Int) {
+        playBeatMIDI(at: index)
+    }
+
+    private func playBeatSound(at index: Int) {
         let beat = groove[index]
-        if beat == .low || beat == .high {
+        if let velocity = beat.velocity, velocity > 0 {
             soundService.play()
+        }
+    }
+
+    private func playBeatMIDI(at index: Int) {
+        let beat = groove[index]
+        if let velocity = beat.velocity {
+            // Pick note (Middle C for now)
+            audioEngine.play(note: 60, velocity: UInt8(velocity))
         }
     }
 }
@@ -390,7 +696,7 @@ class PresetManager {
     }
 
     private static func convertToBeats(_ pattern: [Int]) -> [Beat] {
-        pattern.flatMap { [Beat.high] + Array(repeating: .empty, count: $0 - 1) }
+        pattern.flatMap { [Beat.high(velocity: 100)] + Array(repeating: .empty, count: $0 - 1) }
     }
 
     private struct PresetCodable: Codable {
@@ -410,7 +716,7 @@ class PresetManager {
             var result: [Int] = []
             var i = 0
             while i < beats.count {
-                if beats[i] == .high {
+                if beats[i] == .high(velocity: 100) {
                     var count = 1
                     i += 1
                     while i < beats.count && beats[i] == .empty {
@@ -582,5 +888,147 @@ class SoundService {
 
     func play() {
         AudioServicesPlaySystemSound(tinkSoundID)
+    }
+}
+
+//
+//  VelocityGenerator.swift
+//  Grooves
+//
+//  Created by Victor Noagbodji on 9/6/25.
+//
+
+import Foundation
+
+enum GrooveStyle: String, CaseIterable, Identifiable {
+    case rock, funk, jazz, bossa, metal, folk
+    var id: String { rawValue }
+}
+
+enum TimeSignature: String, CaseIterable, Identifiable {
+    case fourFour = "4/4"
+    case threeFour = "3/4"
+    case sixEight = "6/8"
+    case nineEight = "9/8"
+    var id: String { rawValue }
+}
+
+enum Contour: String, CaseIterable, Identifiable {
+    case rising, normal, falling, dip
+    var id: String { rawValue }
+}
+
+enum AccentStrength { case strong, medium }
+
+struct VelocityGenerator {
+    struct StyleRule {
+        let accentBoost: Int
+        let mediumBoost: Int
+        let weakAdjust: Int
+        let humanize: Int
+    }
+
+    static let rules: [GrooveStyle: StyleRule] = [
+        .rock:  StyleRule(accentBoost: 14, mediumBoost: 8, weakAdjust: -6, humanize: 5),
+        .funk:  StyleRule(accentBoost: 16, mediumBoost: 10, weakAdjust: -10, humanize: 7),
+        .jazz:  StyleRule(accentBoost: 8,  mediumBoost: 4, weakAdjust: -4, humanize: 6),
+        .bossa: StyleRule(accentBoost: 10, mediumBoost: 6, weakAdjust: -8, humanize: 5),
+        .metal: StyleRule(accentBoost: 6,  mediumBoost: 4, weakAdjust: -3, humanize: 3),
+        .folk:  StyleRule(accentBoost: 12, mediumBoost: 6, weakAdjust: -5, humanize: 4),
+    ]
+
+    // Accent patterns based on time signature
+    static func accentPattern(for sig: TimeSignature, length: Int) -> [Int: AccentStrength] {
+        switch sig {
+        case .fourFour:
+            let step = length / 4
+            return [0: .strong, 2*step: .medium]
+        case .threeFour:
+            let step = length / 3
+            return [0: .strong]
+        case .sixEight:
+            let step = length / 6
+            return [0: .strong, 3*step: .medium]
+        case .nineEight:
+            let step = length / 9
+            return [0: .strong, 3*step: .medium, 6*step: .medium]
+        }
+    }
+
+    // Apply contour shaping
+    static func applyContour(_ velocities: [Int], contour: Contour) -> [Int] {
+        let n = velocities.count
+        guard n > 0 else { return velocities }
+
+        switch contour {
+        case .rising:
+            return velocities.enumerated().map { i, v in
+                let factor = Double(i+1) / Double(n)
+                return Int(Double(v) * (0.7 + 0.3 * factor))
+            }
+        case .falling:
+            return velocities.enumerated().map { i, v in
+                let factor = 1.0 - Double(i) / Double(n)
+                return Int(Double(v) * (0.7 + 0.3 * factor))
+            }
+        case .normal: // Gaussian peak in the middle
+            return velocities.enumerated().map { i, v in
+                let x = Double(i - n/2) / Double(n/4)
+                let gaussian = exp(-0.5 * x * x) // 0..1
+                return Int(Double(v) * (0.7 + 0.3 * gaussian))
+            }
+        case .dip: // Lower velocities in the middle
+            return velocities.enumerated().map { i, v in
+                let x = Double(i - n/2) / Double(n/4)
+                let gaussian = exp(-0.5 * x * x)
+                let dipFactor = 1.0 - 0.3 * gaussian
+                return Int(Double(v) * dipFactor)
+            }
+        }
+    }
+
+    static func generate(
+        groove: [Beat],
+        style: GrooveStyle,
+        base: Int,
+        timeSig: TimeSignature,
+        contour: Contour
+    ) -> [Int] {
+        guard let rule = rules[style] else { return [] }
+        let accents = accentPattern(for: timeSig, length: groove.count)
+        var velocities: [Int] = []
+
+        for i in 0..<groove.count {
+            let slot = groove[i]
+            if case .empty = slot {
+                velocities.append(0)
+                continue
+            }
+
+            var v = base
+            if let strength = accents[i] {
+                switch strength {
+                case .strong: v += rule.accentBoost
+                case .medium: v += rule.mediumBoost
+                }
+            } else {
+                switch slot {
+                case .low: v += rule.weakAdjust
+                case .high: break
+                case .empty: break
+                }
+            }
+
+            // Clamp
+            v = max(1, min(127, v))
+
+            // Humanize
+            let jitter = Int.random(in: -rule.humanize...rule.humanize)
+            v = max(1, min(127, v + jitter))
+
+            velocities.append(v)
+        }
+
+        return applyContour(velocities, contour: contour)
     }
 }
