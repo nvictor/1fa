@@ -1107,137 +1107,108 @@ struct TreeBuilder {
         case .byResourceType:
             return buildByResourceType(snapshot: snapshot, metric: metric)
         case .byNamespace:
-            return buildByNamespace(snapshot: snapshot, metric: metric)
+            return buildByNamespace(snapshot: snapshot, metric:metric)
         }
     }
 
     private static func buildByResourceType(snapshot: ClusterSnapshot, metric: SizingMetric) -> TreeNode {
-        // Root → Namespace → Deployment → Pod
-        let children = snapshot.namespaces.map { ns -> TreeNode in
-            let namespaceName = ns.metadata.name
-            let deployments = snapshot.deploymentsByNS[namespaceName] ?? []
-            let pods = snapshot.podsByNS[namespaceName] ?? []
+        var namespaceNodes: [TreeNode] = []
+        for ns in snapshot.namespaces {
+            let deployments = snapshot.deploymentsByNS[ns.metadata.name] ?? []
+            let pods = snapshot.podsByNS[ns.metadata.name] ?? []
+            var deploymentNodes: [TreeNode] = []
 
-            // Track which pods are managed by deployments
-            var managedPodUIDs = Set<String>()
-
-            let deploymentNodes: [TreeNode] = deployments.map { dep in
-                let depPods = pods.filter { isPodControlledBy($0, owner: dep.metadata) }
-                managedPodUIDs.formUnion(depPods.map { $0.metadata.uid })
-
-                let podNodes = depPods.map { pod in
-                    TreeNode(name: pod.metadata.name, value: metricValue(pod: pod, metric: metric), children: [])
+            for deployment in deployments {
+                let ownedPods = pods.filter { pod in
+                    let ownerNames = pod.metadata.ownerReferences?.map { $0.name } ?? []
+                    return ownerNames.contains { $0.starts(with: deployment.metadata.name) }
                 }
-                let value = max(1, podNodes.reduce(0) { $0 + $1.value })
-                return TreeNode(name: dep.metadata.name, value: value, children: podNodes)
+                
+                let podNodes = ownedPods.map { pod in
+                    TreeNode(name: pod.metadata.name, value: metricValue(for: pod, metric: metric), children: [])
+                }
+                
+                if !podNodes.isEmpty {
+                    let totalValue = podNodes.reduce(0) { $0 + $1.value }
+                    deploymentNodes.append(TreeNode(name: deployment.metadata.name, value: totalValue, children: podNodes))
+                }
             }
-
-            // ⬇️ NEW: include standalone pods so the namespace isn’t a leaf
-            let standalonePods = pods.filter { !managedPodUIDs.contains($0.metadata.uid) }
-            let standalonePodNodes: [TreeNode] = standalonePods.map { pod in
-                TreeNode(name: pod.metadata.name, value: metricValue(pod: pod, metric: metric), children: [])
+            
+            if !deploymentNodes.isEmpty {
+                let totalValue = deploymentNodes.reduce(0) { $0 + $1.value }
+                namespaceNodes.append(TreeNode(name: ns.metadata.name, value: totalValue, children: deploymentNodes))
             }
-
-            var nsChildren: [TreeNode] = deploymentNodes
-            if !standalonePodNodes.isEmpty {
-                let value = max(1, standalonePodNodes.reduce(0) { $0 + $1.value })
-                nsChildren.append(TreeNode(name: "Standalone Pods", value: value, children: standalonePodNodes))
-            }
-
-            let value = max(1, nsChildren.reduce(0) { $0 + $1.value })
-            return TreeNode(name: namespaceName, value: value, children: nsChildren)
         }
-
-        let total = max(1, children.reduce(0) { $0 + $1.value })
-        return TreeNode(name: "Cluster", value: total, children: children)
+        
+        let totalValue = namespaceNodes.reduce(0) { $0 + $1.value }
+        return TreeNode(name: "Cluster", value: totalValue, children: namespaceNodes)
     }
 
     private static func buildByNamespace(snapshot: ClusterSnapshot, metric: SizingMetric) -> TreeNode {
-        // Root → Namespace → Kind → Name
-        let nsNodes: [TreeNode] = snapshot.namespaces.map { ns in
-            let namespace = ns.metadata.name
-            let deployments = snapshot.deploymentsByNS[namespace] ?? []
-            let pods = snapshot.podsByNS[namespace] ?? []
-
-            // Find which pods are managed by the deployments in this namespace
-            var managedPodUIDs = Set<String>()
-            let deploymentNodes: [TreeNode] = deployments.map { dep in
-                let depPods = pods.filter { isPodControlledBy($0, owner: dep.metadata) }
-                managedPodUIDs.formUnion(depPods.map { $0.metadata.uid })
-                let podNodes = depPods.map { pod in
-                    TreeNode(name: pod.metadata.name, value: metricValue(pod: pod, metric: metric), children: [])
-                }
-                let value = max(1, podNodes.reduce(0) { $0 + $1.value })
-                return TreeNode(name: dep.metadata.name, value: value, children: podNodes)
+        var namespaceNodes: [TreeNode] = []
+        for ns in snapshot.namespaces {
+            let deployments = snapshot.deploymentsByNS[ns.metadata.name] ?? []
+            let pods = snapshot.podsByNS[ns.metadata.name] ?? []
+            
+            let deploymentNodes = deployments.map { deployment in
+                TreeNode(name: deployment.metadata.name, value: metricValue(for: deployment, metric: metric), children: [])
             }
+            let deploymentsNode = TreeNode(name: "Deployments", value: deploymentNodes.reduce(0) { $0 + $1.value }, children: deploymentNodes)
 
-            // Standalone pods are those not managed by any of the deployments
-            let standalonePods = pods.filter { !managedPodUIDs.contains($0.metadata.uid) }
-            let standalonePodNodes = standalonePods.map { pod in
-                TreeNode(name: pod.metadata.name, value: metricValue(pod: pod, metric: metric), children: [])
+            let podNodes = pods.map { pod in
+                TreeNode(name: pod.metadata.name, value: metricValue(for: pod, metric: metric), children: [])
             }
-
-            var kinds: [TreeNode] = []
-            if !deploymentNodes.isEmpty {
-                let totalValue = max(1, deploymentNodes.reduce(0) { $0 + $1.value })
-                kinds.append(TreeNode(name: "Deployments", value: totalValue, children: deploymentNodes))
+            let podsNode = TreeNode(name: "Pods", value: podNodes.reduce(0) { $0 + $1.value }, children: podNodes)
+            
+            let children = [deploymentsNode, podsNode].filter { !$0.children.isEmpty }
+            if !children.isEmpty {
+                let totalValue = children.reduce(0) { $0 + $1.value }
+                namespaceNodes.append(TreeNode(name: ns.metadata.name, value: totalValue, children: children))
             }
-            if !standalonePodNodes.isEmpty {
-                let totalValue = max(1, standalonePodNodes.reduce(0) { $0 + $1.value })
-                kinds.append(TreeNode(name: "Standalone Pods", value: totalValue, children: standalonePodNodes))
-            }
-
-            return TreeNode(name: namespace, value: max(1, kinds.reduce(0) { $0 + $1.value }), children: kinds)
         }
-        return TreeNode(name: "Cluster", value: max(1, nsNodes.reduce(0) { $0 + $1.value }), children: nsNodes)
+        
+        let totalValue = namespaceNodes.reduce(0) { $0 + $1.value }
+        return TreeNode(name: "Cluster", value: totalValue, children: namespaceNodes)
     }
 
-    private static func metricValue(pod: KubePod, metric: SizingMetric) -> Double {
-        switch metric {
-        case .count:
-            return 1
-        case .cpu:
-            // sum container requests if present; fall back to 0.1
-            let m = (pod.spec?.containers ?? []).map { milliCPU(from: $0.resources?.requests?["cpu"]) ?? 100 }.reduce(0, +)
-            return Double(m)
-        case .memory:
-            let b = (pod.spec?.containers ?? []).map { bytes(from: $0.resources?.requests?["memory"]) ?? 32*1024*1024 }.reduce(0, +)
-            return Double(b)
-        }
+    private static func metricValue(for pod: KubePod, metric: SizingMetric) -> Double {
+        if metric == .count { return 1.0 }
+        return totalRequests(for: pod.spec, metric: metric)
     }
 
-    private static func isPodControlledBy(_ pod: KubePod, owner: ObjectMeta) -> Bool {
-        guard let refs = pod.metadata.ownerReferences else { return false }
-        return refs.contains { $0.uid == owner.uid }
+    private static func metricValue(for deployment: KubeDeployment, metric: SizingMetric) -> Double {
+        if metric == .count { return 1.0 }
+        let replicas = Double(deployment.spec?.replicas ?? 1)
+        return totalRequests(for: deployment.spec?.template?.spec, metric: metric) * replicas
     }
 
-    private static func metricValue(deployment: KubeDeployment, pods: [KubePod], metric: SizingMetric) -> Double {
-        switch metric {
-        case .count:
-            // The desired number of replicas is a better representation of "count" for a deployment.
-            return Double(deployment.spec?.replicas ?? 1)
-        case .cpu:
-            // Sum the CPU requests of all pods belonging to this deployment.
-            let total = pods.map { metricValue(pod: $0, metric: .cpu) }.reduce(0, +)
-            return max(1, total)
-        case .memory:
-            // Sum the memory requests of all pods belonging to this deployment.
-            let total = pods.map { metricValue(pod: $0, metric: .memory) }.reduce(0, +)
-            return max(1, total)
+    private static func totalRequests(for spec: PodSpec?, metric: SizingMetric) -> Double {
+        guard let containers = spec?.containers else { return 0 }
+        return containers.reduce(0) { total, container in
+            let requests = container.resources?.requests
+            let value: Double? = switch metric {
+            case .cpu:
+                cores(from: requests?["cpu"])
+            case .memory:
+                Double(bytes(from: requests?["memory"]) ?? 0)
+            case .count:
+                1.0
+            }
+            return total + (value ?? 0)
         }
     }
 
-    // Very small unit parsers (best-effort)
-    private static func milliCPU(from value: String?) -> Int? {
-        guard let value else { return nil }
-        if value.hasSuffix("m"), let n = Int(value.dropLast()) { return n }
-        if let d = Double(value) { return Int(d * 1000) }
-        return nil
+    private static func cores(from value: String?) -> Double? {
+        guard var value = value else { return nil }
+        if value.hasSuffix("m") {
+            value.removeLast()
+            return (Double(value) ?? 0) / 1000.0
+        }
+        return Double(value)
     }
 
     private static func bytes(from value: String?) -> Int? {
         guard let value else { return nil }
-        // Supports Ki, Mi, Gi, K, M, G, plain bytes
         let units: [(String, Double)] = [("Ki", 1024), ("Mi", 1024*1024), ("Gi", 1024*1024*1024), ("K", 1000), ("M", 1_000_000), ("G", 1_000_000_000)]
         for (u, mult) in units {
             if value.hasSuffix(u), let n = Double(value.dropLast(u.count)) { return Int(n * mult) }
@@ -1245,7 +1216,6 @@ struct TreeBuilder {
         return Int(value)
     }
 }
-
 //
 //  TreemapLayout.swift
 //  Clustermap
@@ -1259,132 +1229,108 @@ import SwiftUI
 struct TreemapLayout {
     func layout(node: TreeNode, in bounds: CGRect) -> [UUID: CGRect] {
         var frames = [UUID: CGRect]()
-        squarify(children: node.children, in: bounds, frames: &frames)
+        frames[node.id] = bounds
+        layoutChildren(of: node, in: bounds, frames: &frames)
         return frames
     }
 
-    private func squarify(children: [TreeNode], in bounds: CGRect, frames: inout [UUID: CGRect]) {
+    private func layoutChildren(of node: TreeNode, in bounds: CGRect, frames: inout [UUID: CGRect]) {
+        let children = node.children.filter { $0.value > 0 }.sorted { $0.value > $1.value }
         if children.isEmpty { return }
-        
-        let total = children.reduce(0) { $0 + $1.value }
-        if total <= 0 { return }
-        
-        // Sort children by size in descending order
-        let sortedChildren = children.sorted { $0.value > $1.value }
-        
-        squarifyImpl(children: sortedChildren, bounds: bounds, total: total, frames: &frames)
-    }
-    
-    private func squarifyImpl(children: [TreeNode], bounds: CGRect, total: Double, frames: inout [UUID: CGRect]) {
-        if children.isEmpty { return }
-        
-        var remaining = children
-        
-        while !remaining.isEmpty {
-            // Find the best row/column of rectangles
-            let row = findBestRow(children: remaining, bounds: bounds, total: total)
-            
-            // Layout this row
-            let newBounds = layoutRow(row: row, bounds: bounds, total: total, frames: &frames)
-            
-            // Remove the processed children
-            remaining = Array(remaining.dropFirst(row.count))
-            
-            // Recursively process remaining children in the new bounds
-            if !remaining.isEmpty {
-                let remainingTotal = remaining.reduce(0) { $0 + $1.value }
-                squarifyImpl(children: remaining, bounds: newBounds, total: remainingTotal, frames: &frames)
+
+        let totalValue = children.reduce(0) { $0 + $1.value }
+        squarify(children: children, in: bounds, totalValue: totalValue, frames: &frames)
+
+        for child in children {
+            if let childBounds = frames[child.id] {
+                layoutChildren(of: child, in: childBounds, frames: &frames)
             }
-            
-            break // Important: only process one row at this level
         }
     }
-    
-    private func findBestRow(children: [TreeNode], bounds: CGRect, total: Double) -> [TreeNode] {
-        if children.isEmpty { return [] }
+
+    private func squarify(children: [TreeNode], in rect: CGRect, totalValue: Double, frames: inout [UUID: CGRect]) {
+        if children.isEmpty { return }
+
+        var row: [TreeNode] = []
+        var remainingChildren = children
+        var currentRect = rect
         
-        var bestRow = [children[0]]
-        var bestScore = aspectRatioScore(for: bestRow, bounds: bounds, total: total)
-        
-        // Try adding more children to the row
-        for i in 1..<children.count {
-            let testRow = Array(children[0...i])
-            let score = aspectRatioScore(for: testRow, bounds: bounds, total: total)
+        while !remainingChildren.isEmpty {
+            let length = min(currentRect.width, currentRect.height)
+            let nextChild = remainingChildren.first!
             
-            if score < bestScore {
-                bestRow = testRow
-                bestScore = score
-            } else {
-                // Score got worse, stop here
-                break
+            let currentWorst = worstAspectRatio(for: row, length: length)
+            let nextWorst = worstAspectRatio(for: row + [nextChild], length: length)
+
+            if !row.isEmpty && nextWorst > currentWorst {
+                let rowValue = row.reduce(0) { $0 + $1.value }
+                let (rowRect, remainingRect) = layoutRow(value: rowValue, in: currentRect, totalValue: totalValue)
+                
+                placeRow(row: row, in: rowRect, frames: &frames)
+                
+                currentRect = remainingRect
+                squarify(children: remainingChildren, in: currentRect, totalValue: totalValue - rowValue, frames: &frames)
+                return
             }
+            
+            row.append(nextChild)
+            remainingChildren.removeFirst()
         }
         
-        return bestRow
+        placeRow(row: row, in: currentRect, frames: &frames)
     }
-    
-    private func aspectRatioScore(for row: [TreeNode], bounds: CGRect, total: Double) -> Double {
-        if row.isEmpty { return Double.infinity }
-        
-        let rowSum = row.reduce(0) { $0 + $1.value }
-        if rowSum <= 0 { return Double.infinity }
-        
-        let area = (rowSum / total) * bounds.width * bounds.height
-        
-        let isHorizontal = bounds.width >= bounds.height
-        let w = isHorizontal ? bounds.width : area / bounds.height
-        let h = isHorizontal ? area / bounds.width : bounds.height
-        
-        if w <= 0 || h <= 0 { return Double.infinity }
-        
-        let minVal = row.min { $0.value < $1.value }?.value ?? 0
-        let maxVal = row.max { $0.value > $1.value }?.value ?? 0
-        
-        if minVal <= 0 { return Double.infinity }
-        
-        return max((w * w * maxVal) / (h * h * rowSum * rowSum),
-                  (h * h * rowSum * rowSum) / (w * w * minVal))
-    }
-    
-    private func layoutRow(row: [TreeNode], bounds: CGRect, total: Double, frames: inout [UUID: CGRect]) -> CGRect {
-        if row.isEmpty { return bounds }
-        
-        let rowSum = row.reduce(0) { $0 + $1.value }
-        let area = (rowSum / total) * bounds.width * bounds.height
-        
-        let isHorizontal = bounds.width >= bounds.height
-        
-        if isHorizontal {
-            // Horizontal layout
-            let rowHeight = area / bounds.width
-            var x = bounds.minX
-            
-            for child in row {
-                let childWidth = (child.value / rowSum) * bounds.width
-                let frame = CGRect(x: x, y: bounds.minY, width: childWidth, height: rowHeight)
-                frames[child.id] = frame
-                print("Laying out \(child.name) at (\(frame.minX.rounded(.toNearestOrAwayFromZero)), \(frame.minY.rounded(.toNearestOrAwayFromZero)), \(frame.width.rounded(.toNearestOrAwayFromZero)), \(frame.height.rounded(.toNearestOrAwayFromZero)))")
-                x += childWidth
-            }
-            
-            return CGRect(x: bounds.minX, y: bounds.minY + rowHeight, 
-                         width: bounds.width, height: bounds.height - rowHeight)
+
+    private func layoutRow(value: Double, in rect: CGRect, totalValue: Double) -> (CGRect, CGRect) {
+        let area = rect.width * rect.height * (value / totalValue)
+        if rect.width > rect.height {
+            let rowWidth = area / rect.height
+            return (
+                CGRect(x: rect.minX, y: rect.minY, width: rowWidth, height: rect.height),
+                CGRect(x: rect.minX + rowWidth, y: rect.minY, width: rect.width - rowWidth, height: rect.height)
+            )
         } else {
-            // Vertical layout
-            let rowWidth = area / bounds.height
-            var y = bounds.minY
-            
-            for child in row {
-                let childHeight = (child.value / rowSum) * bounds.height
-                let frame = CGRect(x: bounds.minX, y: y, width: rowWidth, height: childHeight)
-                frames[child.id] = frame
-                print("Laying out \(child.name) at (\(frame.minX.rounded(.toNearestOrAwayFromZero)), \(frame.minY.rounded(.toNearestOrAwayFromZero)), \(frame.width.rounded(.toNearestOrAwayFromZero)), \(frame.height.rounded(.toNearestOrAwayFromZero)))")
-                y += childHeight
-            }
-            
-            return CGRect(x: bounds.minX + rowWidth, y: bounds.minY,
-                         width: bounds.width - rowWidth, height: bounds.height)
+            let rowHeight = area / rect.width
+            return (
+                CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: rowHeight),
+                CGRect(x: rect.minX, y: rect.minY + rowHeight, width: rect.width, height: rect.height - rowHeight)
+            )
         }
+    }
+
+    private func placeRow(row: [TreeNode], in rect: CGRect, frames: inout [UUID: CGRect]) {
+        let rowValue = row.reduce(0) { $0 + $1.value }
+        var currentOrigin = CGPoint(x: rect.minX, y: rect.minY)
+        
+        for node in row {
+            let nodeArea = rect.width * rect.height * (node.value / rowValue)
+            if rect.width > rect.height {
+                let nodeWidth = nodeArea / rect.height
+                frames[node.id] = CGRect(origin: currentOrigin, size: CGSize(width: nodeWidth, height: rect.height))
+                currentOrigin.x += nodeWidth
+            } else {
+                let nodeHeight = nodeArea / rect.width
+                frames[node.id] = CGRect(origin: currentOrigin, size: CGSize(width: rect.width, height: nodeHeight))
+                currentOrigin.y += nodeHeight
+            }
+        }
+    }
+
+    private func worstAspectRatio(for row: [TreeNode], length: CGFloat) -> Double {
+        if row.isEmpty { return .infinity }
+        
+        let sum = row.reduce(0) { $0 + $1.value }
+        if sum == 0 { return .infinity }
+        
+        var maxRatio: Double = 0
+        let lengthSquared = length * length
+        let sumSquared = sum * sum
+        
+        for node in row {
+            let area = lengthSquared * node.value / sum
+            let ratio = max(area / sumSquared, sumSquared / area)
+            maxRatio = max(maxRatio, ratio)
+        }
+        return maxRatio
     }
 }
 //
@@ -1401,66 +1347,107 @@ struct TreemapView: View {
     let node: TreeNode
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                // Render all the visible nodes from the pre-calculated frames
-                // Only render direct children of the current node
-                ForEach(node.children.sorted(by: { $0.value > $1.value }), id: \.id) { childNode in
-                    if let frame = viewModel.nodeFrames[childNode.id] {
-                        let isLeaf = childNode.children.isEmpty
-                        let bgColor = colorForValue(childNode.value)
-
-                        if isLeaf {
-                            LeafView(title: childNode.name, value: childNode.value, textColor: textColorForBackgroundColor(bgColor))
-                                .background(bgColor)
-                                .frame(width: frame.width, height: frame.height)
-                                .position(x: frame.midX, y: frame.midY)
-                        } else {
-                            RoundedRectangle(cornerRadius: 4)
-                                .stroke(Color.primary.opacity(0.5), lineWidth: 1)
-                                .background(Color.secondary.opacity(0.1))
-                                .frame(width: frame.width, height: frame.height)
-                                .position(x: frame.midX, y: frame.midY)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    viewModel.navigateTo(childNode)
-                                }
-                        }
+        GeometryReader { geometry in
+            ZStack(alignment: .topLeading) {
+                ForEach(node.children) { child in
+                    if let frame = viewModel.nodeFrames[child.id] {
+                        NodeView(node: child)
+                            .frame(width: frame.width, height: frame.height)
+                            .offset(x: frame.minX, y: frame.minY)
                     }
                 }
             }
-            .onChange(of: geo.size) { _, newSize in
+            .onChange(of: geometry.size) { _, newSize in
                 viewModel.updateFrames(for: node, in: newSize)
+            }
+            .onAppear {
+                viewModel.updateFrames(for: node, in: geometry.size)
+            }
+        }
+        .background(Color(.windowBackgroundColor))
+        .clipped()
+        .navigationTitle(viewModel.currentNode.name)
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                HStack {
+                    Button(action: viewModel.navigateToRoot) {
+                        Image(systemName: "house")
+                    }
+                    .disabled(viewModel.navigationPath.isEmpty)
+                    
+                    if !viewModel.navigationPath.isEmpty {
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    ForEach(viewModel.navigationPath.indices, id: \.self) { index in
+                        let node = viewModel.navigationPath[index]
+                        Button(node.name) {
+                            let count = viewModel.navigationPath.count - 1 - index
+                            if count > 0 {
+                                viewModel.navigationPath.removeLast(count)
+                                viewModel.updateFrames(for: viewModel.currentNode)
+                            }
+                        }
+                        if index < viewModel.navigationPath.count - 1 {
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
             }
         }
     }
 }
 
-//
-//  ViewHelpers.swift
-//  Clustermap
-//
-//  Created by Victor Noagbodji on 8/16/25.
-//
+fileprivate struct NodeView: View {
+    @EnvironmentObject private var viewModel: ClusterViewModel
+    let node: TreeNode
+    
+    private var color: Color {
+        Color.from(string: node.name)
+    }
+    
+    private var textColor: Color {
+        color.luminance > 0.6 ? .black : .white
+    }
 
-import SwiftUI
-
-// Helper to generate colors based on node values
-func colorForValue(_ value: Double) -> Color {
-    guard value > 0 else { return Color(.systemGray) }
-    // Use a logarithmic scale to map values to a hue.
-    // The constants are tweaked to provide a pleasant blue -> yellow -> red spectrum.
-    // Hue: 0.66 (blue) -> 0.33 (green) -> 0.16 (yellow) -> 0.0 (red)
-    let logValue = log10(value + 1)
-    // Map log value from a range, e.g., 1...8 to a hue range 0.66...0.0
-    let hue = 0.66 - (logValue / 12.0)
-    return Color(hue: max(0.0, min(0.66, hue)), saturation: 0.7, brightness: 0.95)
+    var body: some View {
+        let view = ZStack(alignment: .topLeading) {
+            Rectangle().fill(color)
+            
+            if node.isLeaf {
+                LeafView(title: node.name, value: node.value, textColor: textColor)
+            } else {
+                Text(node.name)
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .padding(4)
+                    .foregroundColor(textColor)
+            }
+        }
+        .overlay(Rectangle().stroke(Color.white.opacity(0.4), lineWidth: 1))
+        
+        if node.isLeaf {
+            view
+        } else {
+            view.onTapGesture {
+                viewModel.navigateTo(node)
+            }
+        }
+    }
 }
 
-func textColorForBackgroundColor(_ color: Color) -> Color {
-    // Simple heuristic to determine if the background is light or dark.
-    var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-    NSColor(color).getRed(&r, green: &g, blue: &b, alpha: &a)
-    let luminance = 0.299 * r + 0.587 * g + 0.114 * b
-    return luminance > 0.6 ? .black : .white
+fileprivate extension Color {
+    static func from(string: String) -> Color {
+        let hash = string.unicodeScalars.reduce(0) { $0 ^ $1.value }
+        let hue = Double(hash % 256) / 256.0
+        return Color(hue: hue, saturation: 0.7, brightness: 0.8)
+    }
+    
+    var luminance: Double {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        NSColor(self).getRed(&r, green: &g, blue: &b, alpha: &a)
+        return 0.2126 * Double(r) + 0.7152 * Double(g) + 0.0722 * Double(b)
+    }
 }
