@@ -1,3 +1,4 @@
+// FILE: BGLayeredWaves.swift
 //
 //  BGLayeredWaves.swift
 //  Vignette
@@ -8,38 +9,97 @@
 import SwiftUI
 
 struct BGLayeredWaves: View {
-   var body: some View {
-       ZStack(alignment: .bottom) {
-           Wave(color: .pink.opacity(0.6), offset: 40)
-           Wave(color: .pink.opacity(0.8), offset: 20)
-           Wave(color: .pink, offset: 0)
-       }
-   }
+    let count: Int
+    let baseColor: Color
+    let backgroundColor: Color
+    let waves: [WaveProps]
+
+    init() {
+        let count = Int.random(in: 2...8)
+        let hue = Double.random(in: 0...1)
+        let saturation = Double.random(in: 0.5...1)
+        let brightness = Double.random(in: 0.7...1)
+
+        let baseColor = Color(hue: hue, saturation: saturation, brightness: brightness)
+        let backgroundColor = Color(hue: hue, saturation: saturation * 0.3, brightness: min(brightness * 1.2, 1.0))
+
+        let waves = (0..<count).map { index in
+            let saturationStep = saturation * ((Double(index) * 0.1)
+            let brightnessStep = brightness * ((Double(index) * 0.1)
+
+            return WaveProps(
+                color: Color(hue: hue, saturation: saturationStep, brightness: brightnessStep),
+                offset: CGFloat(index * 30),
+                control1: CGPoint(
+                    x: 0.3 + Double.random(in: -0.1...0.1),
+                    y: Double.random(in: -100...100)
+                ),
+                control2: CGPoint(
+                    x: 0.7 + Double.random(in: -0.1...0.1),
+                    y: Double.random(in: -100...100)
+                )
+            )
+        }
+
+        self.count = count
+        self.baseColor = baseColor
+        self.backgroundColor = backgroundColor
+        self.waves = waves
+    }
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            backgroundColor.ignoresSafeArea()
+            ForEach(0..<count, id: \.self) { index in
+                Wave(
+                    color: waves[index].color,
+                    offset: waves[index].offset,
+                    control1: waves[index].control1,
+                    control2: waves[index].control2
+                )
+            }
+        }
+    }
+}
+
+struct WaveProps {
+    var color: Color
+    var offset: CGFloat
+    var control1: CGPoint
+    var control2: CGPoint
 }
 
 struct Wave: View {
-   var color: Color
-   var offset: CGFloat
+    var color: Color
+    var offset: CGFloat
+    var control1: CGPoint
+    var control2: CGPoint
 
-   var body: some View {
-       GeometryReader { geo in
-           Path { path in
-               let width = geo.size.width
-               let height = geo.size.height
+    var body: some View {
+        GeometryReader { geo in
+            Path { path in
+                let width = geo.size.width
+                let height = geo.size.height
 
-               path.move(to: CGPoint(x: 0, y: height - offset))
-               path.addCurve(to: CGPoint(x: width, y: height - offset),
-                             control1: CGPoint(x: width * 0.3, y: height - offset - 30),
-                             control2: CGPoint(x: width * 0.7, y: height - offset + 30))
-               path.addLine(to: CGPoint(x: width, y: height))
-               path.addLine(to: CGPoint(x: 0, y: height))
-               path.closeSubpath()
-           }
-           .fill(color)
-       }
-   }
+                path.move(to: CGPoint(x: 0, y: height - offset))
+                path.addCurve(
+                    to: CGPoint(x: width, y: height - offset),
+                    control1: CGPoint(x: width * control1.x, y: height - offset + control1.y),
+                    control2: CGPoint(x: width * control2.x, y: height - offset + control2.y))
+                path.addLine(to: CGPoint(x: width, y: height))
+                path.addLine(to: CGPoint(x: 0, y: height))
+                path.closeSubpath()
+            }
+            .fill(color)
+        }
+    }
 }
 
+#Preview {
+    BGLayeredWaves()
+}
+
+// FILE: BGLowPoly.swift
 //
 //  BGLowPoly.swift
 //  Vignette
@@ -74,6 +134,7 @@ struct BGLowPoly: View {
     }
 }
 
+// FILE: BGRandom.swift
 //
 //  BGRandom.swift
 //  Vignette
@@ -111,6 +172,7 @@ struct BGRandom: View {
     }
 }
 
+// FILE: BGVanishingRays.swift
 //
 //  BGVanishingRays.swift
 //  Vignette
@@ -146,6 +208,7 @@ struct BGVanishingRays: View {
     }
 }
 
+// FILE: ContentView.swift
 //
 //  ContentView.swift
 //  Vignette
@@ -172,10 +235,12 @@ struct ContentView: View {
                             .textFieldStyle(PlainTextFieldStyle())
                             .font(.title)
                             .foregroundColor(.white)
+                            .multilineTextAlignment(.center)
                         TextField("Enter punchline", text: $punchline)
                             .textFieldStyle(PlainTextFieldStyle())
                             .font(.title)
                             .foregroundColor(.white)
+                            .multilineTextAlignment(.center)
                     }
                 case 1:
                     JokeView(style: style, setup: setup, punchline: punchline)
@@ -217,6 +282,7 @@ struct ContentView: View {
     ContentView()
 }
 
+// FILE: ImageExporter.swift
 //
 //  ImageExporter.swift
 //  Vignette
@@ -256,6 +322,19 @@ struct ImageExporter {
     }
 }
 
+// FILE: Info.plist
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>UIAppFonts</key>
+	<array>
+		<string>CherryBombOne-Regular.ttf</string>
+	</array>
+</dict>
+</plist>
+
+// FILE: JokeView.swift
 //
 //  JokeView.swift
 //  Vignette
@@ -299,6 +378,7 @@ struct JokeView: View {
     }
 }
 
+// FILE: StrokeModifier.swift
 //
 //  StrokeModifier.swift
 //  Vignette
@@ -338,6 +418,19 @@ extension View {
     }
 }
 
+// FILE: Vignette.entitlements
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+</dict>
+</plist>
+
+// FILE: VignetteApp.swift
 //
 //  VignetteApp.swift
 //  Vignette

@@ -1,3 +1,4 @@
+// FILE: Attendee.swift
 //
 //  Attendee.swift
 //  Presence
@@ -14,6 +15,7 @@ struct Attendee: Identifiable, Codable {
     var state: Int = 0
 }
 
+// FILE: AttendeeViewModel.swift
 //
 //  AttendeeViewModel.swift
 //  Presence
@@ -73,6 +75,7 @@ class AttendeeViewModel: ObservableObject {
     }
 }
 
+// FILE: AvatarCard.swift
 //
 //  AvatarCard.swift
 //  Presence
@@ -124,6 +127,7 @@ struct AvatarCard: View {
     }
 }
 
+// FILE: ContentView.swift
 //
 //  ContentView.swift
 //  Presence
@@ -203,6 +207,7 @@ struct ContentView: View {
     ContentView()
 }
 
+// FILE: IconPicker.swift
 //
 //  IconPicker.swift
 //  Presence
@@ -253,6 +258,19 @@ struct IconPicker: View {
     }
 }
 
+// FILE: Presence.entitlements
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.files.user-selected.read-only</key>
+	<true/>
+</dict>
+</plist>
+
+// FILE: PresenceApp.swift
 //
 //  PresenceApp.swift
 //  Presence
@@ -271,6 +289,7 @@ struct PresenceApp: App {
     }
 }
 
+// FILE: RenameSheet.swift
 //
 //  RenameSheet.swift
 //  Presence
@@ -319,6 +338,7 @@ struct RenameSheet: View {
     }
 }
 
+// FILE: ShakeEffect.swift
 //
 //  ShakeEffect.swift
 //  Presence
