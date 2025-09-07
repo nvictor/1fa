@@ -1,3 +1,4 @@
+// FILE: ArrowHead.swift
 //
 //  ArrowHead.swift
 //  Connect
@@ -19,7 +20,7 @@ struct ArrowHead: Shape {
         let points = [
             CGPoint(x: tip.x - size * cos(angle - .pi / 6), y: tip.y - size * sin(angle - .pi / 6)),
             tip,
-            CGPoint(x: tip.x - size * cos(angle + .pi / 6), y: tip.y - size * sin(angle + .pi / 6))
+            CGPoint(x: tip.x - size * cos(angle + .pi / 6), y: tip.y - size * sin(angle + .pi / 6)),
         ]
         path.move(to: points[0])
         path.addLine(to: points[1])
@@ -29,6 +30,7 @@ struct ArrowHead: Shape {
     }
 }
 
+// FILE: Connector.swift
 //
 //  Connector.swift
 //  Connect
@@ -48,6 +50,7 @@ struct Connector: Identifiable {
     let to: (nodeID: UUID, side: NodeSide)
 }
 
+// FILE: ConnectorView.swift
 //
 //  ConnectorView.swift
 //  Connect
@@ -71,6 +74,7 @@ struct ConnectorView: View {
     }
 }
 
+// FILE: ContentView.swift
 //
 //  ContentView.swift
 //  Connect
@@ -91,9 +95,11 @@ struct ContentView: View {
         ZStack {
             ForEach(connectors) { connector in
                 if let fromNode = node(for: connector.from.nodeID),
-                   let toNode = node(for: connector.to.nodeID) {
-                    ConnectorView(from: connectionPoint(for: fromNode, side: connector.from.side),
-                                  to: connectionPoint(for: toNode, side: connector.to.side))
+                    let toNode = node(for: connector.to.nodeID)
+                {
+                    ConnectorView(
+                        from: connectionPoint(for: fromNode, side: connector.from.side),
+                        to: connectionPoint(for: toNode, side: connector.to.side))
                 }
             }
 
@@ -129,13 +135,14 @@ struct ContentView: View {
 
     private func handleKey(_ event: NSEvent) {
         guard let selectedID = selectedNodeID,
-              let currentNode = node(for: selectedID) else { return }
+            let currentNode = node(for: selectedID)
+        else { return }
 
         let directions: [UInt16: NodeSide] = [
-            126: .top,     // up arrow
-            125: .bottom,  // down arrow
+            126: .top,    // up arrow
+            125: .bottom,    // down arrow
             123: .left,    // left arrow
-            124: .right    // right arrow
+            124: .right,    // right arrow
         ]
 
         if let side = directions[event.keyCode] {
@@ -150,11 +157,12 @@ struct ContentView: View {
 
             let newNode = Node(id: UUID(), position: newPosition)
             nodes.append(newNode)
-            connectors.append(Connector(
-                id: UUID(),
-                from: (currentNode.id, side),
-                to: (newNode.id, opposite(side))
-            ))
+            connectors.append(
+                Connector(
+                    id: UUID(),
+                    from: (currentNode.id, side),
+                    to: (newNode.id, opposite(side))
+                ))
             selectedNodeID = newNode.id
         }
     }
@@ -173,6 +181,7 @@ struct ContentView: View {
     ContentView()
 }
 
+// FILE: ConnectApp.swift
 //
 //  ConnectApp.swift
 //  Connect
@@ -191,6 +200,7 @@ struct ConnectApp: App {
     }
 }
 
+// FILE: KeyCatcherView.swift
 //
 //  KeyCatcherView.swift
 //  Connect
@@ -225,6 +235,7 @@ struct KeyCatcherView: NSViewRepresentable {
     }
 }
 
+// FILE: Node.swift
 //
 //  Node.swift
 //  Connect
@@ -240,6 +251,7 @@ struct Node: Identifiable {
     var size: CGSize = CGSize(width: 100, height: 60)
 }
 
+// FILE: NodeView.swift
 //
 //  NodeView.swift
 //  Diagram
