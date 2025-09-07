@@ -1,3 +1,4 @@
+// FILE: AudioEngineManager.swift
 //
 //  AudioEngineManager.swift
 //  Grooves
@@ -103,6 +104,8 @@ class AudioEngineManager {
     }
 }
 
+
+// FILE: Beat.swift
 //
 //  Beat.swift
 //  Grooves
@@ -153,6 +156,8 @@ enum Beat: Equatable, Codable, Hashable {
     }
 }
 
+
+// FILE: BeatBlock.swift
 //
 //  BeatBlock.swift
 //  Grooves
@@ -182,6 +187,8 @@ struct BeatBlock: View {
     }
 }
 
+
+// FILE: ContentView.swift
 //
 //  ContentView.swift
 //  Grooves
@@ -268,6 +275,8 @@ struct ContentView: View {
     ContentView()
 }
 
+
+// FILE: Editor.swift
 //
 //  Editor.swift
 //  Grooves
@@ -302,6 +311,8 @@ struct Editor: View {
     }
 }
 
+
+// FILE: Grooves.entitlements
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -313,6 +324,8 @@ struct Editor: View {
 </dict>
 </plist>
 
+
+// FILE: GroovesApp.swift
 //
 //  GroovesApp.swift
 //  Grooves
@@ -331,6 +344,8 @@ struct GroovesApp: App {
     }
 }
 
+
+// FILE: ImageExporter.swift
 //
 //  ImageExporter.swift
 //  Grooves
@@ -372,6 +387,8 @@ struct ImageExporter {
     }
 }
 
+
+// FILE: Inspector.swift
 //
 //  Inspector.swift
 //  Grooves
@@ -468,6 +485,8 @@ struct Inspector: View {
     }
 }
 
+
+// FILE: MIDIExporter.swift
 //
 //  MIDIExporter.swift
 //  Grooves
@@ -553,6 +572,8 @@ struct MIDIExporter {
     }
 }
 
+
+// FILE: PlaybackManager.swift
 //
 //  PlaybackManager.swift
 //  Grooves
@@ -637,6 +658,8 @@ class PlaybackManager: ObservableObject {
     }
 }
 
+
+// FILE: Preset.swift
 //
 //  Preset.swift
 //  Grooves
@@ -652,6 +675,8 @@ struct Preset: Identifiable, Equatable, Hashable {
     let beats: [Beat]
 }
 
+
+// FILE: PresetManager.swift
 //
 //  PresetManager.swift
 //  Grooves
@@ -827,6 +852,8 @@ class PresetManager {
     """
 }
 
+
+// FILE: Sidebar.swift
 //
 //  Sidebar.swift
 //  Grooves
@@ -864,6 +891,8 @@ struct Sidebar: View {
     }
 }
 
+
+// FILE: SoundService.swift
 //
 //  SoundService.swift
 //  Grooves
@@ -891,6 +920,8 @@ class SoundService {
     }
 }
 
+
+// FILE: VelocityGenerator.swift
 //
 //  VelocityGenerator.swift
 //  Grooves
@@ -944,7 +975,7 @@ struct VelocityGenerator {
             let step = length / 4
             return [0: .strong, 2*step: .medium]
         case .threeFour:
-            let step = length / 3
+            _ = length / 3
             return [0: .strong]
         case .sixEight:
             let step = length / 6
