@@ -1,3 +1,4 @@
+// FILE: Client.swift
 //
 //  Client.swift
 //  Clustermap
@@ -95,47 +96,8 @@ final class Client {
     }
 }
 
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-	<key>com.apple.security.app-sandbox</key>
-	<false/>
-	<key>com.apple.security.files.user-selected.read-only</key>
-	<true/>
-	<key>com.apple.security.network.client</key>
-	<true/>
-	<key>com.apple.security.personal-information.location</key>
-	<false/>
-	<key>keychain-access-groups</key>
-	<array>
-		<string>$(AppIdentifierPrefix)com.mellowfleet.Clustermap</string>
-	</array>
-</dict>
-</plist>
 
-//
-//  ClustermapApp.swift
-//  Clustermap
-//
-//  Created by Victor Noagbodji on 8/16/25.
-//
-
-import SwiftUI
-
-@main
-struct ClustermapApp: App {
-    @StateObject private var viewModel = ClusterViewModel()
-
-    var body: some Scene {
-        WindowGroup {
-            ContentView()
-                .environmentObject(viewModel)
-                .navigationTitle("Clustermap")
-        }
-    }
-}
-
+// FILE: ClusterService.swift
 //
 //  ClusterService.swift
 //  Clustermap
@@ -216,6 +178,8 @@ private struct NamespaceResources {
     let pods: [KubePod]
 }
 
+
+// FILE: ClusterViewModel.swift
 //
 //  ClusterViewModel.swift
 //  Clustermap
@@ -262,6 +226,53 @@ final class ClusterViewModel: ObservableObject {
     }
 }
 
+
+// FILE: Clustermap.entitlements
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.app-sandbox</key>
+	<false/>
+	<key>com.apple.security.files.user-selected.read-only</key>
+	<true/>
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<key>com.apple.security.personal-information.location</key>
+	<false/>
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.mellowfleet.Clustermap</string>
+	</array>
+</dict>
+</plist>
+
+
+// FILE: ClustermapApp.swift
+//
+//  ClustermapApp.swift
+//  Clustermap
+//
+//  Created by Victor Noagbodji on 8/16/25.
+//
+
+import SwiftUI
+
+@main
+struct ClustermapApp: App {
+    @StateObject private var viewModel = ClusterViewModel()
+
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+                .environmentObject(viewModel)
+                .navigationTitle("Clustermap")
+        }
+    }
+}
+
+
+// FILE: ConfigLoader.swift
 //
 //  ConfigLoader.swift
 //  Clustermap
@@ -531,6 +542,8 @@ final class ConfigLoader {
     }
 }
 
+
+// FILE: ConsoleView.swift
 //
 //  ConsoleView.swift
 //  Clustermap
@@ -552,6 +565,8 @@ struct ConsoleView: View {
     }
 }
 
+
+// FILE: Constants.swift
 //
 //  Constants.swift
 //  Clustermap
@@ -616,6 +631,8 @@ extension Color {
     }
 }
 
+
+// FILE: ContentView.swift
 //
 //  ContentView.swift
 //  Clustermap
@@ -652,6 +669,8 @@ struct ContentView: View {
     }
 }
 
+
+// FILE: IdentityService.swift
 //
 //  IdentityService.swift
 //  Clustermap
@@ -689,6 +708,8 @@ struct IdentityService {
     }
 }
 
+
+// FILE: Info.plist
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -699,9 +720,9 @@ struct IdentityService {
 		<dict>
 			<key>127.0.0.1</key>
 			<dict>
-				<key>NSExceptionAllowsInsecureHTTPLoads</key>
-				<true/>
 				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
 				<true/>
 			</dict>
 		</dict>
@@ -709,6 +730,8 @@ struct IdentityService {
 </dict>
 </plist>
 
+
+// FILE: Inspector.swift
 //
 //  Inspector.swift
 //  Clustermap
@@ -747,6 +770,8 @@ struct Inspector: View {
     }
 }
 
+
+// FILE: LogService.swift
 //
 //  LogService.swift
 //  Clustermap
@@ -774,6 +799,8 @@ final class LogService: ObservableObject {
     }
 }
 
+
+// FILE: LogView.swift
 //
 //  LogView.swift
 //  Clustermap
@@ -885,6 +912,8 @@ struct LogMessageView: View {
     }
 }
 
+
+// FILE: Models.swift
 //
 //  Models.swift
 //  Clustermap
@@ -992,6 +1021,8 @@ struct LogEntry: Identifiable, Hashable {
     let timestamp: Date
 }
 
+
+// FILE: TLSDelegate.swift
 //
 //  TLSDeleagte.swift
 //  Clustermap
@@ -1088,6 +1119,8 @@ final class TLSDelegate: NSObject, URLSessionDelegate {
     }
 }
 
+
+// FILE: TreeBuilder.swift
 //
 //  TreeBuilder.swift
 //  Clustermap
@@ -1301,6 +1334,8 @@ private struct ResourceCalculator {
     }
 }
 
+
+// FILE: TreemapView.swift
 //
 //  TreemapView.swift
 //  Clustermap
