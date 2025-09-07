@@ -96,7 +96,6 @@ final class Client {
     }
 }
 
-
 // FILE: ClusterService.swift
 //
 //  ClusterService.swift
@@ -178,7 +177,6 @@ private struct NamespaceResources {
     let pods: [KubePod]
 }
 
-
 // FILE: ClusterViewModel.swift
 //
 //  ClusterViewModel.swift
@@ -226,7 +224,6 @@ final class ClusterViewModel: ObservableObject {
     }
 }
 
-
 // FILE: Clustermap.entitlements
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -246,7 +243,6 @@ final class ClusterViewModel: ObservableObject {
 	</array>
 </dict>
 </plist>
-
 
 // FILE: ClustermapApp.swift
 //
@@ -270,7 +266,6 @@ struct ClustermapApp: App {
         }
     }
 }
-
 
 // FILE: ConfigLoader.swift
 //
@@ -542,7 +537,6 @@ final class ConfigLoader {
     }
 }
 
-
 // FILE: ConsoleView.swift
 //
 //  ConsoleView.swift
@@ -564,7 +558,6 @@ struct ConsoleView: View {
         }
     }
 }
-
 
 // FILE: Constants.swift
 //
@@ -631,7 +624,6 @@ extension Color {
     }
 }
 
-
 // FILE: ContentView.swift
 //
 //  ContentView.swift
@@ -668,7 +660,6 @@ struct ContentView: View {
             }
     }
 }
-
 
 // FILE: IdentityService.swift
 //
@@ -708,7 +699,6 @@ struct IdentityService {
     }
 }
 
-
 // FILE: Info.plist
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -729,7 +719,6 @@ struct IdentityService {
 	</dict>
 </dict>
 </plist>
-
 
 // FILE: Inspector.swift
 //
@@ -770,7 +759,6 @@ struct Inspector: View {
     }
 }
 
-
 // FILE: LogService.swift
 //
 //  LogService.swift
@@ -798,7 +786,6 @@ final class LogService: ObservableObject {
         logEntries.removeAll()
     }
 }
-
 
 // FILE: LogView.swift
 //
@@ -912,7 +899,6 @@ struct LogMessageView: View {
     }
 }
 
-
 // FILE: Models.swift
 //
 //  Models.swift
@@ -1021,7 +1007,6 @@ struct LogEntry: Identifiable, Hashable {
     let timestamp: Date
 }
 
-
 // FILE: TLSDelegate.swift
 //
 //  TLSDeleagte.swift
@@ -1118,7 +1103,6 @@ final class TLSDelegate: NSObject, URLSessionDelegate {
         return (.useCredential, credential)
     }
 }
-
 
 // FILE: TreeBuilder.swift
 //
@@ -1333,7 +1317,6 @@ private struct ResourceCalculator {
         return Int(value)
     }
 }
-
 
 // FILE: TreemapView.swift
 //

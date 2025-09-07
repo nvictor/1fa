@@ -1,3 +1,4 @@
+// FILE: ContentView.swift
 //
 //  ContentView.swift
 //  Moves
@@ -66,6 +67,7 @@ struct ContentView: View {
     ContentView()
 }
 
+// FILE: Editor.swift
 //
 //  Editor.swift
 //  Moves
@@ -107,6 +109,7 @@ struct Editor: View {
     }
 }
 
+// FILE: ImageExporter.swift
 //
 //  ImageExporter.swift
 //  Moves
@@ -148,6 +151,7 @@ struct ImageExporter {
     }
 }
 
+// FILE: Inspector.swift
 //
 //  Inspector.swift
 //  Moves
@@ -227,6 +231,7 @@ struct Inspector: View {
     }
 }
 
+// FILE: Line.swift
 //
 //  Line.swift
 //  Moves
@@ -243,6 +248,7 @@ struct Line: Identifiable, Codable, Hashable {
     var repeatCount: Int = 1
 }
 
+// FILE: Movement.swift
 //
 //  Movement.swift
 //  Moves
@@ -265,6 +271,7 @@ enum Movement: String, CaseIterable, Codable {
     }
 }
 
+// FILE: Moves.entitlements
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -276,6 +283,7 @@ enum Movement: String, CaseIterable, Codable {
 </dict>
 </plist>
 
+// FILE: MovesApp.swift
 //
 //  MovesApp.swift
 //  Moves
@@ -294,6 +302,7 @@ struct MovesApp: App {
     }
 }
 
+// FILE: Preset.swift
 //
 //  Preset.swift
 //  Moves
@@ -309,6 +318,7 @@ struct Preset: Identifiable, Codable, Hashable, Equatable {
     let segments: [Segment]
 }
 
+// FILE: PresetManager.swift
 //
 //  PresetManager.swift
 //  Moves
@@ -465,6 +475,7 @@ class PresetManager {
     """
 }
 
+// FILE: Segment.swift
 //
 //  Segment.swift
 //  Moves
@@ -481,6 +492,7 @@ struct Segment: Identifiable, Codable, Hashable {
     var note: String
 }
 
+// FILE: SegmentBlock.swift
 //
 //  SegmentBlock.swift
 //  Moves
@@ -514,6 +526,7 @@ struct SegmentBlock: View {
     }
 }
 
+// FILE: Sidebar.swift
 //
 //  Sidebar.swift
 //  Moves

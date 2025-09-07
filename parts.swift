@@ -1,3 +1,4 @@
+// FILE: ContentView.swift
 //
 //  ContentView.swift
 //  Parts
@@ -80,6 +81,7 @@ struct ContentView: View {
     ContentView()
 }
 
+// FILE: Editor.swift
 //
 //  Editor.swift
 //  Parts
@@ -140,6 +142,7 @@ struct Editor: View {
     }
 }
 
+// FILE: ImageExporter.swift
 //
 //  ImageExporter.swift
 //  Parts
@@ -177,6 +180,7 @@ struct ImageExporter {
     }
 }
 
+// FILE: Inspector.swift
 //
 //  Inspector.swift
 //  Parts
@@ -229,6 +233,7 @@ struct Inspector: View {
     }
 }
 
+// FILE: Part.swift
 //
 //  Part.swift
 //  Parts
@@ -257,6 +262,7 @@ enum Part: String, CaseIterable, Codable {
     }
 }
 
+// FILE: Parts.entitlements
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -268,6 +274,7 @@ enum Part: String, CaseIterable, Codable {
 </dict>
 </plist>
 
+// FILE: PartsApp.swift
 //
 //  PartsApp.swift
 //  Parts
@@ -286,6 +293,7 @@ struct PartsApp: App {
     }
 }
 
+// FILE: Preset.swift
 //
 //  Preset.swift
 //  Parts
@@ -301,6 +309,7 @@ struct Preset: Identifiable, Codable, Hashable {
     let segments: [Segment]
 }
 
+// FILE: PresetManager.swift
 //
 //  PresetManager.swift
 //  Parts
@@ -380,6 +389,7 @@ class PresetManager {
     """
 }
 
+// FILE: Segment.swift
 //
 //  Segment.swift
 //  Parts
@@ -395,6 +405,7 @@ struct Segment: Identifiable, Codable, Hashable {
     var length: Int
 }
 
+// FILE: SegmentBlock.swift
 //
 //  SegmentBlock.swift
 //  Parts
@@ -429,6 +440,7 @@ struct SegmentBlock: View {
     }
 }
 
+// FILE: Sidebar.swift
 //
 //  Sidebar.swift
 //  Parts
