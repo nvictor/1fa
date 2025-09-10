@@ -1384,7 +1384,7 @@ struct TreemapView: View {
         if node.isLeaf {
             guard maxLeafValue > 0 else { return .gray }
             let ratio = node.value / maxLeafValue
-            return Color(hue: 0.3 * (1 - ratio), saturation: 0.8, brightness: 0.9)
+            return Color(hue: 0.08 + 0.22 * (1 - ratio), saturation: 0.8, brightness: 0.9)
         } else {
             return Color.from(string: node.name)
         }
