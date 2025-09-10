@@ -125,6 +125,8 @@ struct ClusterService {
         let client = try Client(creds: creds)
 
         let namespaces = try await client.listNamespaces()
+        await LogService.shared.log("Loaded namespaces: \(namespaces.map(\.metadata.name))", type: .info)
+
         let (deploymentsByNS, podsByNS) = try await fetchNamespaceResources(
             for: namespaces,
             using: client
@@ -917,29 +919,12 @@ struct TreeNode: Identifiable, Hashable {
     var isLeaf: Bool { children.isEmpty }
 }
 
-struct KubeNamespace: Codable, Hashable, Identifiable {
-    let metadata: ObjectMeta
-    var id: String { metadata.name }
+struct OwnerReference: Codable, Hashable {
+    let apiVersion: String
+    let kind: String
+    let name: String
+    let uid: String
 }
-
-struct KubeDeploymentList: Codable { let items: [KubeDeployment] }
-struct KubePodList: Codable { let items: [KubePod] }
-struct KubeNamespaceList: Codable { let items: [KubeNamespace] }
-
-struct KubeDeployment: Codable, Hashable, Identifiable {
-    let metadata: ObjectMeta
-    let spec: DeploymentSpec?
-    let status: DeploymentStatus?
-    var id: String { metadata.name }
-}
-
-struct KubePod: Codable, Hashable, Identifiable {
-    let metadata: ObjectMeta
-    let spec: PodSpec?
-    let status: PodStatus?
-    var id: String { metadata.name }
-}
-
 struct ObjectMeta: Codable, Hashable {
     let name: String
     let namespace: String?
@@ -947,35 +932,41 @@ struct ObjectMeta: Codable, Hashable {
     let uid: String
     let ownerReferences: [OwnerReference]?
 }
-
-struct OwnerReference: Codable, Hashable {
-    let apiVersion: String
-    let kind: String
-    let name: String
-    let uid: String
+struct KubeNamespace: Codable, Hashable, Identifiable {
+    let metadata: ObjectMeta
+    var id: String { metadata.name }
 }
-
+struct KubeNamespaceList: Codable { let items: [KubeNamespace] }
 struct ResourceRequirements: Codable, Hashable {
     let requests: [String: String]?
     let limits: [String: String]?
 }
-
 struct ContainerSpec: Codable, Hashable {
     let name: String
     let resources: ResourceRequirements?
 }
-
 struct PodSpec: Codable, Hashable { let containers: [ContainerSpec]? }
 struct PodStatus: Codable, Hashable { let phase: String? }
-
+struct KubePod: Codable, Hashable, Identifiable {
+    let metadata: ObjectMeta
+    let spec: PodSpec?
+    let status: PodStatus?
+    var id: String { metadata.name }
+}
+struct KubePodList: Codable { let items: [KubePod] }
+struct PodTemplate: Codable, Hashable { let spec: PodSpec? }
 struct DeploymentSpec: Codable, Hashable {
     let replicas: Int?
     let template: PodTemplate?
 }
-
-struct PodTemplate: Codable, Hashable { let spec: PodSpec? }
 struct DeploymentStatus: Codable, Hashable { let availableReplicas: Int? }
-
+struct KubeDeployment: Codable, Hashable, Identifiable {
+    let metadata: ObjectMeta
+    let spec: DeploymentSpec?
+    let status: DeploymentStatus?
+    var id: String { metadata.name }
+}
+struct KubeDeploymentList: Codable { let items: [KubeDeployment] }
 struct ClusterSnapshot {
     let namespaces: [KubeNamespace]
     let deploymentsByNS: [String: [KubeDeployment]]
@@ -1342,10 +1333,14 @@ struct TreemapView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            ZStack(alignment: .topLeading) {
+            ZStack(alignment: node.isLeaf ? .center : .topLeading) {
                 backgroundView
-                labelView(geometry: geometry)
-                childrenView(geometry: geometry)
+                if node.isLeaf {
+                    leafView
+                } else {
+                    labelView(geometry: geometry)
+                    childrenView(geometry: geometry)
+                }
             }
         }
         .background(Color(.windowBackgroundColor))
@@ -1361,6 +1356,23 @@ struct TreemapView: View {
             .onHover(perform: handleHover)
             .contentShape(Rectangle())
             .onTapGesture(perform: handleTap)
+    }
+
+    private var leafView: some View {
+        VStack {
+            Text(node.name)
+                .font(.caption)
+                .fontWeight(.medium)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+            Text(formatValue(node.value))
+                .font(.caption2)
+                .opacity(0.8)
+        }
+        .foregroundColor(readableTextColor)
+        .padding(4)
+        .contentShape(Rectangle())
+        .help("\(node.name)\nValue: \(node.value)")
     }
 
     private func labelView(geometry: GeometryProxy) -> some View {
@@ -1386,9 +1398,17 @@ struct TreemapView: View {
         Color.from(string: node.name)
     }
 
+    private var readableTextColor: Color {
+        nodeColor.luminance > 0.5 ? .black : .white
+    }
+
     private var labelColor: Color {
         let zoomController = ZoomController(selectedPath: viewModel.selectedPath, currentPath: path)
-        return zoomController.shouldHighlightLabel() ? .black : .gray
+        if zoomController.shouldHighlightLabel() {
+            return readableTextColor
+        } else {
+            return .gray
+        }
     }
 
     private var isHovered: Bool {
@@ -1435,29 +1455,6 @@ struct TreemapView: View {
     private func isRectLargeEnough(_ rect: CGRect) -> Bool {
         rect.width > LayoutConstants.minDisplayWidth
             && rect.height > LayoutConstants.minDisplayHeight
-    }
-}
-
-struct LeafView: View {
-    let title: String
-    let value: Double
-    let textColor: Color
-
-    var body: some View {
-        VStack {
-            Text(title)
-                .font(.caption)
-                .fontWeight(.medium)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-            Text(formatValue(value))
-                .font(.caption2)
-                .opacity(0.8)
-        }
-        .foregroundColor(textColor)
-        .padding(4)
-        .contentShape(Rectangle())
-        .help("\(title)\nValue: \(value)")
     }
 
     private func formatValue(_ v: Double) -> String {
