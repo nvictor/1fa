@@ -60,6 +60,10 @@ final class Client {
         return try await list(path: "/api/v1/namespaces/\(namespace)/pods", queryItems: queryItems)
     }
 
+    func listPodMetrics(namespace: String) async throws -> [PodMetrics] {
+        try await list(path: "/apis/metrics.k8s.io/v1beta1/namespaces/\(namespace)/pods")
+    }
+
     private func list<Item: Decodable>(path: String, queryItems: [URLQueryItem]? = nil) async throws
         -> [Item]
     {
@@ -92,7 +96,9 @@ final class Client {
             let statusCode = (resp as? HTTPURLResponse)?.statusCode ?? -1
             throw ClientError.httpError(statusCode: statusCode, body: body)
         }
-        return try JSONDecoder().decode(T.self, from: data)
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode(T.self, from: data)
     }
 }
 
@@ -107,12 +113,12 @@ final class Client {
 import Foundation
 
 struct ClusterService {
-    func fetchTree(from path: String, hierarchy: HierarchyView, metric: SizingMetric) async
+    func fetchTree(from path: String, metric: SizingMetric) async
         -> Result<TreeNode, Error>
     {
         do {
             let snapshot = try await fetchClusterData(from: path)
-            let tree = TreeBuilder.build(snapshot: snapshot, hierarchy: hierarchy, metric: metric)
+            let tree = TreeBuilder.build(snapshot: snapshot, metric: metric)
             return .success(tree)
         } catch {
             return .failure(error)
@@ -125,9 +131,10 @@ struct ClusterService {
         let client = try Client(creds: creds)
 
         let namespaces = try await client.listNamespaces()
-        await LogService.shared.log("Loaded namespaces: \(namespaces.map(\.metadata.name))", type: .info)
+        await LogService.shared.log(
+            "Loaded namespaces: \(namespaces.map(\.metadata.name))", type: .info)
 
-        let (deploymentsByNS, podsByNS) = try await fetchNamespaceResources(
+        let (deploymentsByNS, podsByNS, metricsByNS) = try await fetchNamespaceResources(
             for: namespaces,
             using: client
         )
@@ -135,16 +142,18 @@ struct ClusterService {
         return ClusterSnapshot(
             namespaces: namespaces,
             deploymentsByNS: deploymentsByNS,
-            podsByNS: podsByNS
+            podsByNS: podsByNS,
+            metricsByNS: metricsByNS
         )
     }
 
     private func fetchNamespaceResources(
         for namespaces: [KubeNamespace],
         using client: Client
-    ) async throws -> ([String: [KubeDeployment]], [String: [KubePod]]) {
+    ) async throws -> ([String: [KubeDeployment]], [String: [KubePod]], [String: [PodMetrics]]) {
         var deploymentsByNS = [String: [KubeDeployment]]()
         var podsByNS = [String: [KubePod]]()
+        var metricsByNS = [String: [PodMetrics]]()
 
         try await withThrowingTaskGroup(of: NamespaceResources.self) { group in
             for namespace in namespaces {
@@ -156,10 +165,11 @@ struct ClusterService {
             for try await resources in group {
                 deploymentsByNS[resources.name] = resources.deployments
                 podsByNS[resources.name] = resources.pods
+                metricsByNS[resources.name] = resources.metrics
             }
         }
 
-        return (deploymentsByNS, podsByNS)
+        return (deploymentsByNS, podsByNS, metricsByNS)
     }
 
     private func fetchResourcesForNamespace(_ name: String, using client: Client) async throws
@@ -168,8 +178,18 @@ struct ClusterService {
         async let deployments = client.listDeployments(namespace: name)
         async let pods = client.listPods(namespace: name, selector: nil)
 
+        let metrics: [PodMetrics]
+        do {
+            metrics = try await client.listPodMetrics(namespace: name)
+        } catch {
+            await LogService.shared.log(
+                "Could not fetch metrics for namespace \(name): \(error.localizedDescription)",
+                type: .error)
+            metrics = []
+        }
+
         let (d, p) = try await (deployments, pods)
-        return NamespaceResources(name: name, deployments: d, pods: p)
+        return NamespaceResources(name: name, deployments: d, pods: p, metrics: metrics)
     }
 }
 
@@ -177,6 +197,7 @@ private struct NamespaceResources {
     let name: String
     let deployments: [KubeDeployment]
     let pods: [KubePod]
+    let metrics: [PodMetrics]
 }
 
 // FILE: ClusterViewModel.swift
@@ -192,9 +213,9 @@ import SwiftUI
 
 @MainActor
 final class ClusterViewModel: ObservableObject {
-    @Published var hierarchy: HierarchyView = .byResourceType { didSet { reload() } }
     @Published var metric: SizingMetric = .count { didSet { reload() } }
     @Published var root: TreeNode = TreeNode(name: "Welcome", value: 1, children: [])
+    @Published var maxLeafValue: Double = 1.0
     @Published var logEntries: [LogEntry] = []
     @Published var selectedPath: [UUID]?
     @Published var kubeconfigPath: String = ConfigLoader.loadDefaultPath()
@@ -211,18 +232,25 @@ final class ClusterViewModel: ObservableObject {
 
         let result = await service.fetchTree(
             from: kubeconfigPath,
-            hierarchy: hierarchy,
             metric: metric
         )
 
         switch result {
         case .success(let newRoot):
             self.root = newRoot
+            self.maxLeafValue = findMaxLeafValue(in: newRoot)
             self.selectedPath = nil    // Reset zoom when loading new data
         case .failure(let error):
             self.root = TreeNode(name: "Error", value: 1, children: [])
             LogService.shared.log("Error: \(error.localizedDescription)", type: .error)
         }
+    }
+
+    private func findMaxLeafValue(in node: TreeNode) -> Double {
+        if node.isLeaf {
+            return node.value
+        }
+        return node.children.reduce(0) { max($0, findMaxLeafValue(in: $1)) }
     }
 }
 
@@ -599,12 +627,6 @@ enum SizingMetric: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-enum HierarchyView: String, CaseIterable, Identifiable {
-    case byResourceType = "Resource"    // Namespace → Deployment → Pod
-    case byNamespace = "Namespace"    // Namespace → Kind → Name
-    var id: String { rawValue }
-}
-
 extension Color {
     static func from(string: String) -> Color {
         let hash = string.unicodeScalars.reduce(0) { $0 ^ $1.value }
@@ -641,7 +663,7 @@ struct ContentView: View {
     @State private var showInspector = true
 
     var body: some View {
-        TreemapView(node: viewModel.root)
+        TreemapView(node: viewModel.root, maxLeafValue: viewModel.maxLeafValue)
             .inspector(isPresented: $showInspector) {
                 Inspector()
             }
@@ -743,12 +765,6 @@ struct Inspector: View {
                 Button("Load config", action: viewModel.reload)
             }
             Section("Display") {
-                Picker("Hierarchy", selection: $viewModel.hierarchy) {
-                    ForEach(HierarchyView.allCases) { hierarchy in
-                        Text(hierarchy.rawValue).tag(hierarchy)
-                    }
-                }
-                .pickerStyle(.segmented)
                 Picker("Sizing Metric", selection: $viewModel.metric) {
                     ForEach(SizingMetric.allCases) { metric in
                         Text(metric.rawValue).tag(metric)
@@ -929,7 +945,7 @@ struct ObjectMeta: Codable, Hashable {
     let name: String
     let namespace: String?
     let labels: [String: String]?
-    let uid: String
+    let uid: String?
     let ownerReferences: [OwnerReference]?
 }
 struct KubeNamespace: Codable, Hashable, Identifiable {
@@ -967,13 +983,36 @@ struct KubeDeployment: Codable, Hashable, Identifiable {
     var id: String { metadata.name }
 }
 struct KubeDeploymentList: Codable { let items: [KubeDeployment] }
+
+struct MetricUsage: Codable, Hashable {
+    let cpu: String
+    let memory: String
+}
+
+struct ContainerMetrics: Codable, Hashable {
+    let name: String
+    let usage: MetricUsage
+}
+
+struct PodMetrics: Codable, Hashable {
+    let metadata: ObjectMeta
+    let timestamp: String
+    let window: String
+    let containers: [ContainerMetrics]
+}
+
+struct PodMetricsList: Codable {
+    let items: [PodMetrics]
+}
+
 struct ClusterSnapshot {
     let namespaces: [KubeNamespace]
     let deploymentsByNS: [String: [KubeDeployment]]
     let podsByNS: [String: [KubePod]]
+    let metricsByNS: [String: [PodMetrics]]
 
     static func empty() -> ClusterSnapshot {
-        .init(namespaces: [], deploymentsByNS: [:], podsByNS: [:])
+        .init(namespaces: [], deploymentsByNS: [:], podsByNS: [:], metricsByNS: [:])
     }
 }
 
@@ -1107,15 +1146,10 @@ import Foundation
 import SwiftUI
 
 struct TreeBuilder {
-    static func build(snapshot: ClusterSnapshot, hierarchy: HierarchyView, metric: SizingMetric)
+    static func build(snapshot: ClusterSnapshot, metric: SizingMetric)
         -> TreeNode
     {
-        switch hierarchy {
-        case .byResourceType:
-            return buildByResourceType(snapshot: snapshot, metric: metric)
-        case .byNamespace:
-            return buildByNamespace(snapshot: snapshot, metric: metric)
-        }
+        return buildByResourceType(snapshot: snapshot, metric: metric)
     }
 
     private static func buildByResourceType(snapshot: ClusterSnapshot, metric: SizingMetric)
@@ -1123,20 +1157,6 @@ struct TreeBuilder {
     {
         let namespaceNodes = snapshot.namespaces.compactMap { namespace in
             createNamespaceNodeByResourceType(
-                namespace: namespace,
-                snapshot: snapshot,
-                metric: metric
-            )
-        }
-
-        return createTreeNode(name: "Cluster", children: namespaceNodes)
-    }
-
-    private static func buildByNamespace(snapshot: ClusterSnapshot, metric: SizingMetric)
-        -> TreeNode
-    {
-        let namespaceNodes = snapshot.namespaces.compactMap { namespace in
-            createNamespaceNodeByKind(
                 namespace: namespace,
                 snapshot: snapshot,
                 metric: metric
@@ -1155,7 +1175,8 @@ struct TreeBuilder {
         let pods = snapshot.podsByNS[namespace.metadata.name] ?? []
 
         let deploymentNodes = deployments.compactMap { deployment in
-            createDeploymentNodeWithPods(deployment: deployment, pods: pods, metric: metric)
+            createDeploymentNodeWithPods(
+                deployment: deployment, pods: pods, snapshot: snapshot, metric: metric)
         }
 
         guard !deploymentNodes.isEmpty else { return nil }
@@ -1165,6 +1186,7 @@ struct TreeBuilder {
     private static func createDeploymentNodeWithPods(
         deployment: KubeDeployment,
         pods: [KubePod],
+        snapshot: ClusterSnapshot,
         metric: SizingMetric
     ) -> TreeNode? {
         let ownedPods = findOwnedPods(for: deployment, in: pods)
@@ -1172,43 +1194,12 @@ struct TreeBuilder {
         let podNodes = ownedPods.map { pod in
             createLeafNode(
                 name: pod.metadata.name,
-                value: calculateMetricValue(for: pod, metric: metric)
+                value: calculateMetricValue(for: pod, in: snapshot, metric: metric)
             )
         }
 
         guard !podNodes.isEmpty else { return nil }
         return createTreeNode(name: deployment.metadata.name, children: podNodes)
-    }
-
-    private static func createNamespaceNodeByKind(
-        namespace: KubeNamespace,
-        snapshot: ClusterSnapshot,
-        metric: SizingMetric
-    ) -> TreeNode? {
-        let deployments = snapshot.deploymentsByNS[namespace.metadata.name] ?? []
-        let pods = snapshot.podsByNS[namespace.metadata.name] ?? []
-
-        let deploymentNodes = deployments.map { deployment in
-            createLeafNode(
-                name: deployment.metadata.name,
-                value: calculateMetricValue(for: deployment, metric: metric)
-            )
-        }
-
-        let podNodes = pods.map { pod in
-            createLeafNode(
-                name: pod.metadata.name,
-                value: calculateMetricValue(for: pod, metric: metric)
-            )
-        }
-
-        let kindNodes = [
-            createTreeNode(name: "Deployments", children: deploymentNodes),
-            createTreeNode(name: "Pods", children: podNodes),
-        ].filter { !$0.children.isEmpty }
-
-        guard !kindNodes.isEmpty else { return nil }
-        return createTreeNode(name: namespace.metadata.name, children: kindNodes)
     }
 
     private static func createTreeNode(name: String, children: [TreeNode]) -> TreeNode {
@@ -1229,59 +1220,50 @@ struct TreeBuilder {
         }
     }
 
-    private static func calculateMetricValue(for pod: KubePod, metric: SizingMetric) -> Double {
+    private static func calculateMetricValue(
+        for pod: KubePod, in snapshot: ClusterSnapshot, metric: SizingMetric
+    ) -> Double {
         switch metric {
         case .count:
             return 1.0
         case .cpu, .memory:
-            return ResourceCalculator.totalRequests(for: pod.spec, metric: metric)
-        }
-    }
-
-    private static func calculateMetricValue(for deployment: KubeDeployment, metric: SizingMetric)
-        -> Double
-    {
-        switch metric {
-        case .count:
-            return 1.0
-        case .cpu, .memory:
-            let replicas = Double(deployment.spec?.replicas ?? 1)
-            let baseValue = ResourceCalculator.totalRequests(
-                for: deployment.spec?.template?.spec, metric: metric)
-            return baseValue * replicas
+            guard let podMetrics = snapshot.metricsByNS[pod.metadata.namespace ?? ""]?
+                .first(where: { $0.metadata.name == pod.metadata.name })
+            else {
+                return 0.0
+            }
+            return ResourceCalculator.totalUsage(for: podMetrics, metric: metric)
         }
     }
 }
 
 private struct ResourceCalculator {
-    static func totalRequests(for spec: PodSpec?, metric: SizingMetric) -> Double {
-        guard let containers = spec?.containers else { return 0 }
-
-        return containers.reduce(0) { total, container in
-            let requests = container.resources?.requests
-            let value = extractResourceValue(from: requests, metric: metric)
+    static func totalUsage(for metrics: PodMetrics, metric: SizingMetric) -> Double {
+        metrics.containers.reduce(0) { total, container in
+            let value: Double
+            switch metric {
+            case .cpu:
+                value = parseCpuUsage(container.usage.cpu) ?? 0
+            case .memory:
+                value = parseMemoryUsage(container.usage.memory) ?? 0
+            case .count:
+                value = 1.0
+            }
             return total + value
         }
     }
 
-    private static func extractResourceValue(from requests: [String: String]?, metric: SizingMetric)
-        -> Double
-    {
-        guard let requests = requests else { return 0 }
-
-        switch metric {
-        case .cpu:
-            return parseCpuValue(requests["cpu"]) ?? 0
-        case .memory:
-            return Double(parseMemoryValue(requests["memory"]) ?? 0)
-        case .count:
-            return 1.0
-        }
-    }
-
-    private static func parseCpuValue(_ value: String?) -> Double? {
+    private static func parseCpuUsage(_ value: String?) -> Double? {
         guard var value = value else { return nil }
 
+        if value.hasSuffix("n") {
+            value.removeLast()
+            return (Double(value) ?? 0) / 1_000_000_000.0
+        }
+        if value.hasSuffix("u") {
+            value.removeLast()
+            return (Double(value) ?? 0) / 1_000_000.0
+        }
         if value.hasSuffix("m") {
             value.removeLast()
             return (Double(value) ?? 0) / 1000.0
@@ -1289,7 +1271,7 @@ private struct ResourceCalculator {
         return Double(value)
     }
 
-    private static func parseMemoryValue(_ value: String?) -> Int? {
+    private static func parseMemoryUsage(_ value: String?) -> Double? {
         guard let value = value else { return nil }
 
         let units: [(String, Double)] = [
@@ -1301,11 +1283,11 @@ private struct ResourceCalculator {
             if value.hasSuffix(unit),
                 let number = Double(value.dropLast(unit.count))
             {
-                return Int(number * multiplier)
+                return number * multiplier
             }
         }
 
-        return Int(value)
+        return Double(value)
     }
 }
 
@@ -1323,11 +1305,13 @@ struct TreemapView: View {
     @EnvironmentObject private var viewModel: ClusterViewModel
 
     let node: TreeNode
+    let maxLeafValue: Double
     let path: [UUID]
     @State private var hoveredPath: [UUID]?
 
-    init(node: TreeNode, path: [UUID]? = nil) {
+    init(node: TreeNode, maxLeafValue: Double? = nil, path: [UUID]? = nil) {
         self.node = node
+        self.maxLeafValue = maxLeafValue ?? 1.0
         self.path = path ?? [node.id]
     }
 
@@ -1388,14 +1372,22 @@ struct TreemapView: View {
 
     private func childrenView(geometry: GeometryProxy) -> some View {
         ForEach(layoutChildren(in: geometry.size)) { child in
-            TreemapView(node: child.node, path: path + [child.node.id])
-                .frame(width: child.frame.width, height: child.frame.height)
-                .position(x: child.frame.midX, y: child.frame.midY)
+            TreemapView(
+                node: child.node, maxLeafValue: maxLeafValue, path: path + [child.node.id]
+            )
+            .frame(width: child.frame.width, height: child.frame.height)
+            .position(x: child.frame.midX, y: child.frame.midY)
         }
     }
 
     private var nodeColor: Color {
-        Color.from(string: node.name)
+        if node.isLeaf {
+            guard maxLeafValue > 0 else { return .gray }
+            let ratio = node.value / maxLeafValue
+            return Color(hue: 0.3 * (1 - ratio), saturation: 0.8, brightness: 0.9)
+        } else {
+            return Color.from(string: node.name)
+        }
     }
 
     private var readableTextColor: Color {
@@ -1458,6 +1450,9 @@ struct TreemapView: View {
     }
 
     private func formatValue(_ v: Double) -> String {
+        if viewModel.metric == .cpu && v < 1.0 && v > 0 {
+            return String(format: "%.0fm", v * 1000)
+        }
         if v >= 1_000_000_000 { return String(format: "%.1fG", v / 1_000_000_000) }
         if v >= 1_000_000 { return String(format: "%.1fM", v / 1_000_000) }
         if v >= 1000 { return String(format: "%.0fk", v / 1000) }
