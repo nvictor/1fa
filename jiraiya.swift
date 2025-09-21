@@ -51,10 +51,10 @@ struct ConsoleView: View {
     @State private var selection = Set<UUID>()
 
     var body: some View {
-        VStack {
-            ConsoleHeaderView(selection: $selection)
-            Divider()
+        Section {
             LogView(selection: $selection)
+        } header: {
+            ConsoleHeaderView(selection: $selection)
         }
     }
 }
@@ -139,6 +139,9 @@ struct ContentView: View {
         .onAppear(perform: loadStories)
         .onReceive(NotificationCenter.default.publisher(for: .databaseDidReset)) { _ in
             loadStories()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateToRoot)) { _ in
+            path = NavigationPath()
         }
     }
 
@@ -274,25 +277,14 @@ struct EpicCard: View {
 
     var body: some View {
         GroupBox {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading) {
                 ForEach(outcomeCounts.keys.sorted(), id: \.self) { key in
-                    let count = outcomeCounts[key] ?? 0
-                    if count > 0 {
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(outcomeManager.color(for: key))
-                                .frame(width: 8, height: 8)
-                            Text("\(key) \(count)")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(.vertical, 2)
-                        .padding(.horizontal, 6)
-                        .background(Color.gray.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    if let count = outcomeCounts[key], count > 0 {
+                        OutcomeView(name: key, count: count)
                     }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         } label: {
             Text(epic.title)
                 .font(.headline)
@@ -440,6 +432,7 @@ extension Calendar {
 extension Notification.Name {
     static let databaseDidReset = Notification.Name("databaseDidReset")
     static let reclassifyProgress = Notification.Name("reclassifyProgress")
+    static let navigateToRoot = Notification.Name("navigateToRoot")
 }
 
 // FILE: Helpers.swift
@@ -532,6 +525,7 @@ struct Inspector: View {
                     .textContentType(.emailAddress)
                 SecureField("API Token", text: $jiraApiToken)
                 Button(action: {
+                    NotificationCenter.default.post(name: .navigateToRoot, object: nil)
                     Task {
                         await syncJira()
                     }
@@ -1013,6 +1007,7 @@ struct LogView: View {
                     }
                 }
             }
+            .padding()
             .onChange(of: logService.logEntries) { _, newEntries in
                 if let lastEntry = newEntries.last {
                     proxy.scrollTo(lastEntry.id, anchor: .bottom)
@@ -1154,25 +1149,14 @@ struct MonthCard: View {
 
     var body: some View {
         GroupBox {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading) {
                 ForEach(outcomeCounts.keys.sorted(), id: \.self) { key in
-                    let count = outcomeCounts[key] ?? 0
-                    if count > 0 {
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(outcomeManager.color(for: key))
-                                .frame(width: 8, height: 8)
-                            Text("\(key) \(count)")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(.vertical, 2)
-                        .padding(.horizontal, 6)
-                        .background(Color.gray.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    if let count = outcomeCounts[key], count > 0 {
+                        OutcomeView(name: key, count: count)
                     }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         } label: {
             Text("\(month.name) \(month.year.formatted(.number.grouping(.never)))")
                 .font(.headline)
@@ -1521,12 +1505,10 @@ struct OutcomeSettingsView: View {
             HStack(spacing: 8) {
                 Text("Outcomes")
                 if outcomeManager.isDirty {
-                    Text("Unsaved changes")
-                        .font(.caption2)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.yellow.opacity(0.2))
-                        .cornerRadius(4)
+                    Circle()
+                        .fill(Color.blue)
+                        .frame(width: 8, height: 8)
+                        .help("Unsaved changes")
                 }
                 Spacer()
                 HStack(spacing: 8) {
@@ -1558,6 +1540,32 @@ struct OutcomeSettingsView: View {
                 }
             }
         }
+    }
+}
+
+// FILE: OutcomeView.swift
+// filepath: /Users/victor/Developer/jiraiya/Jiraiya/Jiraiya/OutcomeView.swift
+import SwiftUI
+
+struct OutcomeView: View {
+    @EnvironmentObject private var outcomeManager: OutcomeManager
+    let name: String
+    let count: Int
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Circle()
+                .fill(outcomeManager.color(for: name))
+                .frame(width: 7, height: 7)
+                .accessibilityHidden(true)
+            Text("\(name) \(count)")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .padding(.vertical, 2)
+        .padding(.horizontal, 6)
+        .background(Color.gray.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 }
 
@@ -1602,25 +1610,14 @@ struct QuarterCard: View {
 
     var body: some View {
         GroupBox {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading) {
                 ForEach(outcomeCounts.keys.sorted(), id: \.self) { key in
-                    let count = outcomeCounts[key] ?? 0
-                    if count > 0 {
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(outcomeManager.color(for: key))
-                                .frame(width: 8, height: 8)
-                            Text("\(key) \(count)")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(.vertical, 2)
-                        .padding(.horizontal, 6)
-                        .background(Color.gray.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    if let count = outcomeCounts[key], count > 0 {
+                        OutcomeView(name: key, count: count)
                     }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         } label: {
             Text(quarter.name)
                 .font(.headline)
