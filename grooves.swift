@@ -104,7 +104,6 @@ class AudioEngineManager {
     }
 }
 
-
 // FILE: Beat.swift
 //
 //  Beat.swift
@@ -156,7 +155,6 @@ enum Beat: Equatable, Codable, Hashable {
     }
 }
 
-
 // FILE: BeatBlock.swift
 //
 //  BeatBlock.swift
@@ -186,7 +184,6 @@ struct BeatBlock: View {
         }
     }
 }
-
 
 // FILE: ContentView.swift
 //
@@ -275,7 +272,6 @@ struct ContentView: View {
     ContentView()
 }
 
-
 // FILE: Editor.swift
 //
 //  Editor.swift
@@ -311,7 +307,6 @@ struct Editor: View {
     }
 }
 
-
 // FILE: Grooves.entitlements
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -323,7 +318,6 @@ struct Editor: View {
 	<true/>
 </dict>
 </plist>
-
 
 // FILE: GroovesApp.swift
 //
@@ -343,7 +337,6 @@ struct GroovesApp: App {
         }
     }
 }
-
 
 // FILE: ImageExporter.swift
 //
@@ -386,7 +379,6 @@ struct ImageExporter {
         }
     }
 }
-
 
 // FILE: Inspector.swift
 //
@@ -485,7 +477,6 @@ struct Inspector: View {
     }
 }
 
-
 // FILE: MIDIExporter.swift
 //
 //  MIDIExporter.swift
@@ -572,7 +563,6 @@ struct MIDIExporter {
     }
 }
 
-
 // FILE: PlaybackManager.swift
 //
 //  PlaybackManager.swift
@@ -658,7 +648,6 @@ class PlaybackManager: ObservableObject {
     }
 }
 
-
 // FILE: Preset.swift
 //
 //  Preset.swift
@@ -674,7 +663,6 @@ struct Preset: Identifiable, Equatable, Hashable {
     let name: String
     let beats: [Beat]
 }
-
 
 // FILE: PresetManager.swift
 //
@@ -852,7 +840,6 @@ class PresetManager {
     """
 }
 
-
 // FILE: Sidebar.swift
 //
 //  Sidebar.swift
@@ -891,7 +878,6 @@ struct Sidebar: View {
     }
 }
 
-
 // FILE: SoundService.swift
 //
 //  SoundService.swift
@@ -919,7 +905,6 @@ class SoundService {
         AudioServicesPlaySystemSound(tinkSoundID)
     }
 }
-
 
 // FILE: VelocityGenerator.swift
 //
